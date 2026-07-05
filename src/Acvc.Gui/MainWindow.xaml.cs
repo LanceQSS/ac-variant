@@ -27,7 +27,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         var version = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "?";
-        Title = $"acvc {version}";
+        Title = $"AC Variant {version}";
 
         _vm.PropertyChanged += OnVmPropertyChanged;
         _vm.PreviewUpdated += (_, _) => Dispatcher.Invoke(RenderPreview);

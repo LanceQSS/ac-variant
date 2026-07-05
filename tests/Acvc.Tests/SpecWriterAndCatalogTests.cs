@@ -150,6 +150,45 @@ public class CarCatalogTests : IDisposable
         Assert.False(encrypted.IsBuildable);
         Assert.Contains("CSP/x4fab", encrypted.Reason!);
     }
+
+    [SkippableFact]
+    public void Cache_short_circuits_matching_acd_and_invalidates_on_change()
+    {
+        var fixture = Fixtures.CarFolders()
+            .FirstOrDefault(d => Path.GetFileName(d).Equals("abarth500", StringComparison.OrdinalIgnoreCase));
+        Skip.If(fixture is null, ModelTestUtil.FixtureSkipReason);
+
+        var cars = Path.Combine(_root, "content", "cars");
+        var carDir = Path.Combine(cars, "abarth500");
+        Directory.CreateDirectory(carDir);
+        var acdPath = Path.Combine(carDir, "data.acd");
+        File.Copy(Path.Combine(fixture!, "data.acd"), acdPath);
+        var cachePath = Path.Combine(_root, "cache.json");
+
+        // First scan: classifies for real and writes the cache.
+        var first = CarCatalog.List(_root, cachePath).Single();
+        Assert.Equal("kunos-packed", first.Classification);
+        Assert.True(File.Exists(cachePath));
+
+        // Plant a fake verdict with the CORRECT size/mtime key: a hit must be
+        // trusted without re-decrypting — this proves the short-circuit is real.
+        var info = new FileInfo(acdPath);
+        File.WriteAllText(cachePath,
+            $"{{\"abarth500\":{{\"Size\":{info.Length},\"MtimeTicks\":{info.LastWriteTimeUtc.Ticks}," +
+            "\"Verdict\":\"encrypted\",\"Reason\":\"planted-by-test\"}}");
+        var cached = CarCatalog.List(_root, cachePath).Single();
+        Assert.Equal("encrypted", cached.Classification);
+        Assert.Equal("planted-by-test", cached.Reason);
+
+        // Touch the archive: the key no longer matches, so it re-classifies honestly.
+        File.SetLastWriteTimeUtc(acdPath, DateTime.UtcNow.AddMinutes(1));
+        var refreshed = CarCatalog.List(_root, cachePath).Single();
+        Assert.Equal("kunos-packed", refreshed.Classification);
+
+        // Corrupt cache is discarded, never fatal.
+        File.WriteAllText(cachePath, "{not json");
+        Assert.Equal("kunos-packed", CarCatalog.List(_root, cachePath).Single().Classification);
+    }
 }
 
 public class VariantBuilderTests : IDisposable

@@ -9,6 +9,9 @@ tests/fixtures/
 # Local unpack output
 unpacked/
 
+# Third-party reference tool — purged from git history (M9); local-only, never recommit
+CarTuner/
+
 # IDE / user state
 .vs/
 .idea/

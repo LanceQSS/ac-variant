@@ -25,8 +25,8 @@ v2 adds a WPF GUI shell (`Acvc.Gui`) over the unchanged compiler core, and a pub
   - https://github.com/0danny/AssettoTools — open-source C# implementation of CreateKey/decrypt/encrypt. **Check its license before copying code verbatim**; if missing or restrictive, reimplement from the BMS script/format description (the algorithm is trivial; tests prove correctness either way).
 - Correctness gate: decrypt a stock Kunos `data.acd` and confirm every extracted file parses as INI/LUT text.
 
-## Reference material in this repo
-- `CarTuner/` — 2017 ACCT tool (compiled exe = black-box behavioral reference only; the bundled QuickBMS `.bms` script is the readable artifact of value). Do not ship, link, or vendor any of it into `acvc` output or releases.
+## Reference material (local-only, untracked)
+- `CarTuner/` — 2017 ACCT tool (compiled exe = black-box behavioral reference only; the bundled QuickBMS `.bms` script is the readable artifact of value). **Purged from git history in M9 and gitignored: it exists only on this machine, never in the repo.** Do not ship, link, or vendor any of it into output or releases.
 - Treat `CarTuner/` as read-only reference. It is not a dependency.
 
 ## Architecture
@@ -138,7 +138,7 @@ Do not copy all skin folders (ACCT duplicated gigabytes; its top complaint). **S
 - **History hygiene gate before the repo goes public:** `CarTuner/` (third-party compiled tool + QuickBMS) must never appear in public history — redistributing it violates the same rules we honor. If it was ever committed, rewrite history (git filter-repo) before publishing. Fixtures must also be absent from history (should already hold — verify, don't assume).
 - No installer for beta: single-file exe. Version in title bar and readme.
 - docs/overtake-post.md: what it does, honest-numbers policy stated upfront, encrypted-mods limitation stated upfront, support posture stated upfront (**Kunos cars tested; mod cars best-effort** — loose-data and standard-cipher mods build, encrypted mods refused), maintenance note ("open source, PRs welcome, maintained on a slow cycle").
-- Public name: OPEN decision — "acvc" is a placeholder until chosen; rename touches exe, title bar, repo, post.
+- Public name: **settled (M9): "AC Variant"** — GUI exe, title bar, README, post. The CLI binary stays `acvc`.
 - Beta path: GitHub pre-release tested on a clean second machine (no dev tools) before the Overtake post.
 
 ## Build order (v1 milestones 1–5: done, tagged v1.0)

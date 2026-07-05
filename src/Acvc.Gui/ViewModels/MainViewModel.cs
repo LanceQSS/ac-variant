@@ -93,7 +93,10 @@ public partial class MainViewModel : ObservableObject
         try
         {
             var acPath = AcPath;
-            var list = await Task.Run(() => CarCatalog.List(acPath));
+            var cachePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "acvc", "catalog-cache.json");
+            var list = await Task.Run(() => CarCatalog.List(acPath, cachePath));
             Cars = list.Select(c => new CarListItem(c)).ToList();
             StatusText = $"{list.Count} cars ({list.Count(c => c.IsBuildable)} buildable)";
         }
