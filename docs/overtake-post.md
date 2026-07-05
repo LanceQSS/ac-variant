@@ -68,7 +68,7 @@ loose `data/` folder in every variant to take further by hand.
 
 ## Download & source
 
-- GitHub (source + releases): *(link)*
+- GitHub (source + releases): https://github.com/LanceQSS/ac-variant
 - Current version: **2.0.0-beta.1** — Windows 10/11, x64.
 
 Open source, PRs welcome, maintained on a slow cycle. Report issues on GitHub

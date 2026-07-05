@@ -77,7 +77,7 @@ acvc survey                     # classify + health-check every installed car
 Requires the .NET 8 SDK (released binaries are self-contained and need nothing).
 
 ```
-git clone <repo-url>
+git clone https://github.com/LanceQSS/ac-variant.git
 cd ac-variant
 dotnet build
 dotnet test        # fixture-based tests generate their data from YOUR install:
