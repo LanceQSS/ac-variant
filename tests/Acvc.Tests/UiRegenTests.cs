@@ -83,7 +83,8 @@ public partial class UiRegenTests
         Assert.Equal("1345kg", patch.Weight);
         Assert.Equal("6.31kg/hp", patch.PwRatio);
 
-        var patched = UiCarPatcher.Apply(ui, patch);
+        var (patched, skipped) = UiCarPatcher.Apply(ui, patch);
+        Assert.Empty(skipped);
         var text = Encoding.UTF8.GetString(patched);
 
         Assert.Contains("\"213bhp\"", text);
@@ -123,7 +124,9 @@ public partial class UiRegenTests
         Assert.Equal("1225kg", patch.Weight);
         Assert.Equal("4.90kg/hp", patch.PwRatio);
 
-        var text = Encoding.UTF8.GetString(UiCarPatcher.Apply(ui, patch));
+        var (patchedBmw, skippedBmw) = UiCarPatcher.Apply(ui, patch);
+        Assert.Empty(skippedBmw);
+        var text = Encoding.UTF8.GetString(patchedBmw);
         Assert.Contains("\"250bhp\"", text);
         Assert.DoesNotContain("238bhp", text);
         Assert.Equal(32, StringPair().Count(text));      // 16 points per curve
@@ -132,11 +135,28 @@ public partial class UiRegenTests
     }
 
     [Fact]
-    public void Missing_specs_key_fails_loudly()
+    public void Missing_keys_are_skipped_and_named_never_fatal()
     {
-        var json = Encoding.UTF8.GetBytes("{\"name\": \"X\", \"torqueCurve\": [], \"powerCurve\": []}");
-        var patch = new UiSpecsPatch("1bhp", "1Nm", "1kg", "1.00kg/hp", "[]", "[]");
-        var ex = Assert.Throws<Acvc.Core.Emit.EmitException>(() => UiCarPatcher.Apply(json, patch));
-        Assert.Contains("bhp", ex.Message);
+        // M6 degradation policy: regenerate what exists, report exactly what didn't.
+        var json = Encoding.UTF8.GetBytes("{\"name\": \"X\", \"torqueCurve\": [[\"0\",\"0\"]], \"powerCurve\": [[\"0\",\"0\"]]}");
+        var patch = new UiSpecsPatch("1bhp", "1Nm", "1kg", "1.00kg/hp", "[[\"0\",\"9\"]]", "[[\"0\",\"8\"]]");
+
+        var (patched, skipped) = UiCarPatcher.Apply(json, patch);
+
+        Assert.Equal(new[] { "bhp", "torque", "weight", "pwratio" }, skipped);
+        var text = Encoding.UTF8.GetString(patched);
+        Assert.Contains("[[\"0\",\"9\"]]", text);  // present arrays still regenerated
+        Assert.Contains("[[\"0\",\"8\"]]", text);
+    }
+
+    [Fact]
+    public void ProbeMissing_names_absent_regenerable_fields()
+    {
+        var json = Encoding.UTF8.GetBytes("{\"name\": \"X\", \"specs\": {\"bhp\": \"1bhp\"}, \"powerCurve\": []}");
+        Assert.Equal(new[] { "torque", "weight", "pwratio", "torqueCurve" }, UiCarPatcher.ProbeMissing(json));
+
+        var complete = Encoding.UTF8.GetBytes(
+            "{\"name\":\"X\",\"specs\":{\"bhp\":\"1\",\"torque\":\"1\",\"weight\":\"1\",\"pwratio\":\"1\"},\"torqueCurve\":[],\"powerCurve\":[]}");
+        Assert.Empty(UiCarPatcher.ProbeMissing(complete));
     }
 }

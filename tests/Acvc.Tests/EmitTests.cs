@@ -285,6 +285,53 @@ public class EmitTests : IDisposable
         }
     }
 
+    // ---- M6: loose-data sources and ui degradation -----------------------------
+
+    [SkippableFact]
+    public void Loose_data_source_builds_a_complete_variant()
+    {
+        var source = CreateSourceCar("abarth500");
+        // Convert the scaffold to a loose-data mod car: data/ instead of data.acd.
+        var files = Acvc.Core.Acd.AcdUnpacker.Load(source).Files;
+        Directory.CreateDirectory(Path.Combine(source, "data"));
+        foreach (var (name, bytes) in files)
+            File.WriteAllBytes(Path.Combine(source, "data", name), bytes);
+        File.Delete(Path.Combine(source, "data.acd"));
+
+        var loaded = Acvc.Core.Acd.CarDataLoader.Load(source);
+        Assert.Equal(Acvc.Core.Acd.CarDataOrigin.LooseData, loaded.Origin);
+        var models = CarModelSet.FromFiles(loaded.Files);
+        Assert.False(TunePipeline.Apply(new TunePlan
+        {
+            SourceCar = "abarth500", TuneName = "test_tune", MassTotal = 1234,
+        }, models).HasFailures);
+
+        var result = VariantEmitter.Emit(source, "abarth500_test_tune",
+            models.MergedInto(loaded.Files), Options());
+
+        Assert.False(File.Exists(Path.Combine(result.VariantPath, "data.acd")));
+        Assert.Contains("TOTALMASS=1234",
+            Encoding.Latin1.GetString(File.ReadAllBytes(Path.Combine(result.VariantPath, "data", "car.ini"))));
+        // The source's own loose data/ was replaced by the transformed one in the
+        // variant but never touched at the source.
+        Assert.Contains("TOTALMASS=1100",
+            Encoding.Latin1.GetString(File.ReadAllBytes(Path.Combine(source, "data", "car.ini"))));
+    }
+
+    [SkippableFact]
+    public void Missing_ui_car_json_degrades_with_a_note_instead_of_failing()
+    {
+        var source = CreateSourceCar("abarth500");
+        File.Delete(Path.Combine(source, "ui", "ui_car.json"));
+
+        var result = VariantEmitter.Emit(source, "abarth500_test_tune", TransformedFiles(source), Options());
+
+        Assert.Contains(result.UiNotes, n => n.Contains("ui/ui_car.json missing"));
+        Assert.False(File.Exists(Path.Combine(result.VariantPath, "ui", "ui_car.json")));
+        Assert.True(File.Exists(Path.Combine(result.VariantPath, "ui", "badge.png"))); // rest of ui/ still copied
+        Assert.True(File.Exists(Path.Combine(result.VariantPath, "data", "car.ini")));
+    }
+
     // ---- ui regeneration through the emitter ----------------------------------
 
     [SkippableFact]

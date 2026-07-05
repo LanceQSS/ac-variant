@@ -50,10 +50,15 @@ public static class AcdUnpacker
         return new UnpackedData(folderName, files);
     }
 
-    /// <summary>Unpacks to <paramref name="outDir"/>, refusing any destination inside the source folder.</summary>
+    /// <summary>
+    /// Unpacks to <paramref name="outDir"/>, refusing any destination inside the
+    /// source folder. Accepts loose-data cars too (M6): with no data.acd, the loose
+    /// data/ files are copied out; when both exist, data.acd wins (game behavior).
+    /// </summary>
     public static UnpackedData UnpackToDirectory(string carFolder, string outDir)
     {
-        var data = Load(carFolder);
+        var loaded = CarDataLoader.Load(carFolder);
+        var data = new UnpackedData(loaded.CarFolderName, loaded.Files);
 
         var fullCarFolder = Path.GetFullPath(carFolder);
         var fullOutDir = Path.GetFullPath(outDir);

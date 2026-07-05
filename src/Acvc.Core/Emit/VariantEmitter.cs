@@ -41,7 +41,8 @@ public sealed record EmitResult(
     int DataFileCount,
     string AudioNote,
     IReadOnlyList<string> RenamedBanks,
-    string SkinsNote);
+    string SkinsNote,
+    IReadOnlyList<string> UiNotes);
 
 /// <summary>
 /// Assembles a variant car folder: everything from the source except data.acd (the
@@ -145,20 +146,40 @@ public static class VariantEmitter
         // 5. Skins.
         var skinsNote = EmitSkins(temp, source, options.SkinsMode);
 
-        // 6. ui_car.json: display name, plus regenerated specs/curves when provided.
+        // 6. ui_car.json: display name + regenerated specs/curves. Degradation policy
+        // (M6): missing or mangled ui never blocks a build — regenerate what is
+        // findable, skip the rest, and name exactly what was skipped.
+        var uiNotes = new List<string>();
         var uiCarJson = Path.Combine(temp, "ui", "ui_car.json");
         if (!File.Exists(uiCarJson))
-            throw new EmitException($"Source car has no ui/ui_car.json — it would be invisible in Content Manager.");
-        var uiBytes = UiCarJson.AppendToName(File.ReadAllBytes(uiCarJson), options.UiNameSuffix);
-        if (options.UiPatch is { } patch)
-            uiBytes = UiMeta.UiCarPatcher.Apply(uiBytes, patch);
-        File.WriteAllBytes(uiCarJson, uiBytes);
+        {
+            uiNotes.Add("ui/ui_car.json missing — display name and specs/curves not written");
+        }
+        else
+        {
+            var uiBytes = File.ReadAllBytes(uiCarJson);
+            try
+            {
+                uiBytes = UiCarJson.AppendToName(uiBytes, options.UiNameSuffix);
+            }
+            catch (EmitException)
+            {
+                uiNotes.Add("ui_car.json has no \"name\" property — display name left unchanged");
+            }
+            if (options.UiPatch is { } patch)
+            {
+                var (patched, skipped) = UiMeta.UiCarPatcher.Apply(uiBytes, patch);
+                uiBytes = patched;
+                uiNotes.AddRange(skipped.Select(field => $"ui_car.json has no '{field}' — field skipped"));
+            }
+            File.WriteAllBytes(uiCarJson, uiBytes);
+        }
 
         // 7. Readme.
         File.WriteAllText(Path.Combine(temp, "readme.txt"), BuildReadme(sourceName, variantName, skinsNote, options),
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
-        return new EmitResult(temp, variantName, dataFiles.Count, audioNote, renamedBanks, skinsNote);
+        return new EmitResult(temp, variantName, dataFiles.Count, audioNote, renamedBanks, skinsNote, uiNotes);
     }
 
     /// <summary>

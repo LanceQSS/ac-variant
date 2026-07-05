@@ -3,14 +3,18 @@
 ## What this is
 A C#/.NET 8 CLI that compiles a declarative tune spec (TOML) into a new, non-destructive Assetto Corsa car variant: unpacks the source car's `data.acd`, applies physics-aware transforms, regenerates UI metadata so Content Manager shows correct specs, and emits a complete new car folder with a loose `data/` directory.
 
-**IS:** a compiler from tune-spec → variant car folder with physics-consistent data.
-**IS NOT:** a live editor, an online-play tool, a GUI app, or a decryption utility for protected mods.
+v2 adds a WPF GUI shell (`Acvc.Gui`) over the unchanged compiler core, and a public release target (GitHub + Overtake).
+
+**IS:** a friendly GUI + CLI over the same compiler — pick car, set values, see live dyno/spec preview, build a non-destructive variant. A public tool.
+**IS NOT:** an advanced editor, a raw-file view, a mod manager, or an app with any logic outside `Acvc.Core`. Advanced users get the loose `data/` folder.
 
 ## Non-negotiable rules
 1. **Never modify the original car folder.** All output goes to a new folder (`<car>_<tunename>`). Any code path that writes inside the source folder is a highest-severity bug.
 2. **Never attempt CSP/x4fab-encrypted mods.** The standard Kunos ACD cipher is keyed on the folder name; CSP-era paid-mod encryption is separate and not breakable. Detect it (decrypt output is non-ASCII garbage / known INI files fail to parse), refuse with a clear message, exit non-zero.
 3. **Tune specs are the shareable unit, never tuned data.** Nothing in this tool may package, zip, or export modified Kunos/mod data files for distribution. Output stays in the local `content/cars/` tree. (Kunos ToS + Overtake rules: personal-use modification is fine; redistributing modified official data is not.)
 4. **Fail loudly.** No silent fallbacks. If a transform can't apply (missing `[TURBO]` section on an NA car, malformed LUT), report exactly what and why.
+5. **The GUI is a dumb shell.** Every read, transform, preview computation, and build goes through `Acvc.Core`. If the GUI needs logic, it moves to Core with tests first. The 162+ Core tests remain the authority.
+6. **No network calls at runtime.** No telemetry, no update checks, no remote anything. Zero-maintenance by construction.
 
 ## Verified format facts (do not re-derive; do not contradict)
 - `data.acd` is a sequence of files where each original byte occupies a 32-bit field (packed size ≈ 4× content). Encryption is a simple ROT cipher.
@@ -42,15 +46,26 @@ tests/
 ```
 Design rule: transforms never touch the filesystem. Pipeline is `load → transform (pure) → validate → emit`. Unknown INI keys and comments pass through untouched — the model layer must be lossless for sections it doesn't understand.
 
-## Transforms (v1 complete set — do not add more without explicit instruction)
+## Transforms (v2 complete set = v1 seven + three handling transforms — do not add more without explicit instruction)
 - `power.scale` — multiply power.lut torque values by factor (LUT is torque-at-crank vs RPM).
 - `power.curve` — optional per-range shaping (list of rpm-range → factor).
 - `engine.limiter` — set rev limiter in engine.ini.
 - `engine.boost` — set MAX_BOOST / WASTEGATE in `[TURBO_n]` sections; error if no turbo section exists.
 - `drivetrain.final` / `drivetrain.gears` — final drive and per-gear ratios.
 - `mass.total` — TOTALMASS in car.ini.
+- `tyres.grip_scale` — scales lateral/longitudinal reference grip in **every compound section** of tyres.ini. Tyre-model versions differ in key names across AC's history: derive the per-VERSION key map from the M6 survey results, never from assumption. Unknown VERSION = transform error naming the version found; never a silent skip.
+- `brakes.torque_scale` — scales MAX_TORQUE in brakes.ini.
+- `diff.power` / `diff.coast` — set `[DIFFERENTIAL]` POWER / COAST (0–1 lock fractions); error if the section is absent.
+
+Explicitly still out: springs, ARBs, dampers, geometry, aero, preload, front share, drivetrain conversion (RWD↔AWD — requires sections the source car may not have; not a one-key change).
 
 Validation after transform: mass > 0 and within ±60% of source; LUT monotonic in RPM; no NaN; limiter above peak-power RPM; warn (not fail) past sanity thresholds like >3× power.
+
+ValidationLimits.cs additions (named constants, like the originals):
+- grip_scale: warn outside ±15%, fail outside ±40%.
+- brakes.torque_scale: warn >1.5 or <0.5, fail ≤ 0.
+- diff.power / diff.coast: fail outside [0, 1].
+Repricing note applies to these as to the originals.
 
 ## UI metadata regeneration
 After transforms, regenerate in the variant's `ui/ui_car.json`:
@@ -84,20 +99,51 @@ final = 3.90
 
 [mass]
 total = 1420
+
+[tyres]
+grip_scale = 1.10
+
+[brakes]
+torque_scale = 1.15
+
+[diff]
+power = 0.45
+coast = 0.25
 ```
 Every table optional except `[meta]`. Unknown keys = hard error (catch typos, no silent ignores).
 
 Additional keys: `power.curve = [ { from = 3000, to = 5000, factor = 1.1 }, ... ]` and `drivetrain.gears = [3.2, 2.1, 1.5, 1.1, 0.9]` (must match the car's gear COUNT). power.curve semantics (implemented, M3): `from`/`to` are both **inclusive**; rows outside every listed range — including gaps between ranges — are left untouched; overlapping ranges are a hard error, not a precedence rule.
 
+## Mod-car support (Core)
+- Cars with a loose `data/` and no `data.acd` are first-class inputs. When both exist, `data.acd` wins (matches the game's read behavior).
+- Encrypted data: hard refusal, unchanged (rule 2).
+- UI-metadata degradation: a car whose ui_car.json is absent, unparseable, or missing specs/curves still **builds**. Regenerate what is computable, skip the rest, warn naming exactly which fields were skipped. Never block a build on ui cosmetics.
+- Unknown or extra files in `data/` pass through verbatim (lossless model guarantee now stated as a requirement, not an accident).
+
 ## Skins
 Do not copy all skin folders (ACCT duplicated gigabytes; its top complaint). **Settled in M5 (manual verdict on the real install): AC and CM both follow NTFS junctions in `skins/` — all 10 abarth500 skins listed and rendered through junctions, in CM and in-game.** Default is therefore `--skins junction` (one junction per source skin, created via `mklink /J`; no elevation needed); `--skins copy` copies only the first (alphabetical) skin as the fallback. The variant readme names the skin mode and the source skins path.
 
-## Build order — **all five milestones DONE; v1.0 tagged**
-1. **Cipher + container** — DONE. Key gen ported from the .bms; `acvc unpack` verified against real Kunos cars.
-2. **Model layer** — DONE. Lossless round-trip proven byte-identical (SHA-256) for every .ini/.lut in both fixture archives.
-3. **Transforms + validation** — DONE. Note: the limiter rule compares against peak power within the SOURCE limiter's range (stock bmw_m3_e30 carries overrev LUT rows past its limiter; the naive global-peak rule fails factory data).
-4. **Emit** — DONE. Manual acceptance passed (variant lists, drives, has audio, shows skins in CM). Kunos cars keep their FMOD event map in the global `content/sfx/GUIDs.txt`, not per-car — the emitter generates the variant's per-car `sfx/GUIDs.txt` from the global file's exact-token entries.
-5. **UI metadata + dyno** — DONE. PNG via ScottPlot (settled; not ASCII).
+## GUI (Acvc.Gui)
+- WPF on .NET 8, WPF-UI (Fluent) theme. Windows-only by decision.
+- Single main window: car picker (search box; Kunos/mod badge; encrypted cars visible but grayed with the reason as tooltip — never a late error), two transform groups (**Power & Drivetrain**, **Handling**), tune-name field, live preview pane (dyno plot + bhp/Nm/kg/pwratio with deltas vs stock, recomputed through Core on every change), Build button with result toast and an "open variant folder" action.
+- AC path: autodetect Steam install (registry SteamPath + libraryfolders.vdf parse for secondary libraries), manual folder picker fallback, persisted to acvc.config.toml. Never hardcoded (existing rule).
+- Error surfaces show Core's messages **verbatim** — Core already writes user-grade errors; the GUI must not paraphrase them.
+- Rolling log at %LOCALAPPDATA%\acvc\logs (spec + outcome per build). The bug-report affordance is a button that opens the log folder.
+- Skins: junction default (settled M4); automatic fallback to copy-first-skin when junction creation fails (permissions/non-NTFS), with a notice.
+
+## Release engineering
+- License: MIT. LICENSE at root. Public GitHub repo.
+- **History hygiene gate before the repo goes public:** `CarTuner/` (third-party compiled tool + QuickBMS) must never appear in public history — redistributing it violates the same rules we honor. If it was ever committed, rewrite history (git filter-repo) before publishing. Fixtures must also be absent from history (should already hold — verify, don't assume).
+- No installer for beta: single-file exe. Version in title bar and readme.
+- docs/overtake-post.md: what it does, honest-numbers policy stated upfront, encrypted-mods limitation stated upfront, maintenance note ("open source, PRs welcome, maintained on a slow cycle").
+- Public name: OPEN decision — "acvc" is a placeholder until chosen; rename touches exe, title bar, repo, post.
+- Beta path: GitHub pre-release tested on a clean second machine (no dev tools) before the Overtake post.
+
+## Build order (v1 milestones 1–5: done, tagged v1.0)
+6. **Mod-car hardening:** loose-data support, `acvc survey` over the full install, triage + fix core bugs, ui degradation policy. Gate: survey clean of core bugs; one loose-data mod car builds and drives.
+7. **Handling transforms:** the +3 set, tyre-version key map from survey data, validation limits. Gate: tests + manual drive check (grip/brake/diff changes each perceptible and sane).
+8. **GUI:** per the GUI section. Gate: build a variant end-to-end through the GUI on my machine, including one mod car and one encrypted car shown grayed.
+9. **Release:** history hygiene gate, MIT, README, post draft, clean-machine beta test, GitHub pre-release. Gate: exe runs on a machine that has never seen the .NET SDK.
 
 ## Environment
 - Windows 11, .NET 8 LTS, single-file publish (`dotnet publish -r win-x64 -p:PublishSingleFile=true`).
@@ -113,7 +159,8 @@ dotnet run --project src/Acvc.Cli -- build specs/street_600.toml
 dotnet run --project src/Acvc.Cli -- build specs/street_600.toml --force --skins copy
 dotnet run --project src/Acvc.Cli -- unpack ks_toyota_supra_mkiv
 dotnet run --project src/Acvc.Cli -- dyno specs/street_600.toml
+dotnet run --project src/Acvc.Cli -- survey --report survey.json
 ```
 
-## Out of scope (v1 — reject scope creep, cite this section)
-GUI, suspension/aero geometry, kn5 editing, CSP extended physics, online/server tune distribution, `.acd` repacking, anything touching x4fab encryption, batch multi-car application (open decision for v2).
+## Out of scope (v2 — reject scope creep, cite this section)
+Raw/advanced editing tab, suspension/aero/geometry transforms, drivetrain conversion, batch multi-car application, .acd repacking, auto-updates, telemetry, localization, cross-platform, anything touching x4fab encryption (permanent).

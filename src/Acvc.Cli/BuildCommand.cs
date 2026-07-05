@@ -111,6 +111,8 @@ internal static class BuildCommand
                               (result.RenamedBanks.Count > 0 ? $"; banks: {string.Join(", ", result.RenamedBanks)}" : ""));
             Console.WriteLine($"  skins: {result.SkinsNote}");
             Console.WriteLine($"  ui specs: {uiPatch.Bhp}, {uiPatch.Torque}, {uiPatch.Weight}, {uiPatch.PwRatio} (LUT-derived)");
+            foreach (var note in result.UiNotes)
+                Console.WriteLine($"warning [ui]: {note}");
             return Program.ExitOk;
         }
         catch (TuneSpecException ex)
@@ -147,24 +149,9 @@ internal static class BuildCommand
     }
 
     /// <summary>
-    /// Source data files, in memory: from data.acd when packed, else from a loose
-    /// data/ folder (common for mods). Neither path writes anything.
+    /// Source data files, in memory: data.acd when packed (wins over loose — game
+    /// behavior), else the loose data/ folder. Neither path writes anything.
     /// </summary>
     internal static IReadOnlyDictionary<string, byte[]> LoadSourceData(string sourceFolder)
-    {
-        if (File.Exists(Path.Combine(sourceFolder, "data.acd")))
-            return AcdUnpacker.Load(sourceFolder).Files;
-
-        var dataDir = Path.Combine(sourceFolder, "data");
-        if (!Directory.Exists(dataDir))
-            throw new InvalidOperationException(
-                $"{sourceFolder} has neither data.acd nor a loose data/ folder — nothing to tune.");
-
-        var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in Directory.GetFiles(dataDir))
-            files[Path.GetFileName(file)] = File.ReadAllBytes(file);
-        if (files.Count == 0)
-            throw new InvalidOperationException($"{dataDir} is empty — nothing to tune.");
-        return files;
-    }
+        => CarDataLoader.Load(sourceFolder).Files;
 }

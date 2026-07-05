@@ -53,15 +53,59 @@ public static class UiCarPatcher
             FormatCurve(points, p => p.PowerBhp));
     }
 
-    public static byte[] Apply(byte[] json, UiSpecsPatch patch)
+    /// <summary>
+    /// Applies each field independently (M6 degradation policy): a ui_car.json
+    /// missing some or all keys still gets everything that IS present regenerated;
+    /// the returned list names exactly the fields that had to be skipped. Never
+    /// throws for missing keys — ui cosmetics must not block a build.
+    /// </summary>
+    public static (byte[] Json, IReadOnlyList<string> SkippedFields) Apply(byte[] json, UiSpecsPatch patch)
     {
-        json = ReplaceStringValue(json, "bhp", patch.Bhp);
-        json = ReplaceStringValue(json, "torque", patch.Torque);
-        json = ReplaceStringValue(json, "weight", patch.Weight);
-        json = ReplaceStringValue(json, "pwratio", patch.PwRatio);
-        json = ReplaceArrayValue(json, "torqueCurve", patch.TorqueCurveJson);
-        json = ReplaceArrayValue(json, "powerCurve", patch.PowerCurveJson);
-        return json;
+        var skipped = new List<string>();
+        json = TryReplaceString(json, "bhp", patch.Bhp, skipped);
+        json = TryReplaceString(json, "torque", patch.Torque, skipped);
+        json = TryReplaceString(json, "weight", patch.Weight, skipped);
+        json = TryReplaceString(json, "pwratio", patch.PwRatio, skipped);
+        json = TryReplaceArray(json, "torqueCurve", patch.TorqueCurveJson, skipped);
+        json = TryReplaceArray(json, "powerCurve", patch.PowerCurveJson, skipped);
+        return (json, skipped);
+    }
+
+    /// <summary>The regenerable ui fields NOT present in <paramref name="json"/> (survey + build warnings).</summary>
+    public static IReadOnlyList<string> ProbeMissing(byte[] json)
+    {
+        var missing = new List<string>();
+        foreach (var (key, isString) in new[]
+                 {
+                     ("name", true), ("bhp", true), ("torque", true), ("weight", true),
+                     ("pwratio", true), ("torqueCurve", false), ("powerCurve", false),
+                 })
+        {
+            if (FindValueSpanOrNull(json, key, isString) is null)
+                missing.Add(key);
+        }
+        return missing;
+    }
+
+    private static byte[] TryReplaceString(byte[] json, string key, string newValue, List<string> skipped)
+    {
+        if (FindValueSpanOrNull(json, key, expectString: true) is not { } span)
+        {
+            skipped.Add(key);
+            return json;
+        }
+        return Splice(json, span.Start, span.End, Encoding.UTF8.GetBytes(
+            newValue.Replace("\\", "\\\\").Replace("\"", "\\\"")));
+    }
+
+    private static byte[] TryReplaceArray(byte[] json, string key, string newArrayJson, List<string> skipped)
+    {
+        if (FindValueSpanOrNull(json, key, expectString: false) is not { } span)
+        {
+            skipped.Add(key);
+            return json;
+        }
+        return Splice(json, span.Start, span.End, Encoding.UTF8.GetBytes(newArrayJson));
     }
 
     private static string FormatCurve(IReadOnlyList<CurvePoint> points, Func<CurvePoint, double> value)
@@ -82,19 +126,6 @@ public static class UiCarPatcher
 
     // ---- byte splicing ----------------------------------------------------------
 
-    private static byte[] ReplaceStringValue(byte[] json, string key, string newValue)
-    {
-        var (valueStart, valueEnd) = FindValueSpan(json, key, expectString: true);
-        return Splice(json, valueStart, valueEnd, Encoding.UTF8.GetBytes(
-            newValue.Replace("\\", "\\\\").Replace("\"", "\\\"")));
-    }
-
-    private static byte[] ReplaceArrayValue(byte[] json, string key, string newArrayJson)
-    {
-        var (valueStart, valueEnd) = FindValueSpan(json, key, expectString: false);
-        return Splice(json, valueStart, valueEnd, Encoding.UTF8.GetBytes(newArrayJson));
-    }
-
     private static byte[] Splice(byte[] json, int start, int end, byte[] replacement)
     {
         var result = new byte[json.Length - (end - start) + replacement.Length];
@@ -105,12 +136,12 @@ public static class UiCarPatcher
     }
 
     /// <summary>
-    /// Locates the value of the first `"key":` occurrence. For strings, returns the
-    /// span of the content between the quotes; for arrays, the span of the whole
-    /// [...] including brackets. Key matching includes both quotes, so "torque"
-    /// never matches the prefix of "torqueCurve".
+    /// Locates the value of the first `"key":` occurrence, or null when absent. For
+    /// strings, returns the span of the content between the quotes; for arrays, the
+    /// span of the whole [...] including brackets. Key matching includes both
+    /// quotes, so "torque" never matches the prefix of "torqueCurve".
     /// </summary>
-    private static (int Start, int End) FindValueSpan(byte[] json, string key, bool expectString)
+    private static (int Start, int End)? FindValueSpanOrNull(byte[] json, string key, bool expectString)
     {
         var pattern = Encoding.ASCII.GetBytes($"\"{key}\"");
         for (var i = 0; i + pattern.Length < json.Length; i++)
@@ -166,7 +197,7 @@ public static class UiCarPatcher
             }
             break;
         }
-        throw new EmitException($"ui_car.json has no '{key}' value to regenerate.");
+        return null;
     }
 
     private static bool IsWs(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';

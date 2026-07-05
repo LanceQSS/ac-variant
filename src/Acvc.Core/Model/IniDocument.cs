@@ -103,6 +103,26 @@ public sealed class IniDocument
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+    /// <summary>All key names under every occurrence of <paramref name="section"/>, in document order.</summary>
+    public IReadOnlyList<string> KeysOf(string section)
+    {
+        var keys = new List<string>();
+        var current = "";
+        foreach (var line in _lines)
+        {
+            switch (line)
+            {
+                case SectionHeaderIniLine header:
+                    current = header.Name.Trim();
+                    break;
+                case KeyValueIniLine kv when string.Equals(current, section, StringComparison.OrdinalIgnoreCase):
+                    keys.Add(kv.Key);
+                    break;
+            }
+        }
+        return keys;
+    }
+
     public bool TryGetValue(string section, string key, out string value)
     {
         var line = FindLast(section, key);

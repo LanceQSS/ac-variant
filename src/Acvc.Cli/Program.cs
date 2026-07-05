@@ -49,6 +49,7 @@ internal static class Program
         root.Subcommands.Add(unpack);
         root.Subcommands.Add(BuildCommand.Create());
         root.Subcommands.Add(DynoCommand.Create());
+        root.Subcommands.Add(SurveyCommand.Create());
         return root.Parse(args).Invoke();
     }
 
