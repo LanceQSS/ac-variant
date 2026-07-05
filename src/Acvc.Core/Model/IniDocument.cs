@@ -149,6 +149,18 @@ public sealed class IniDocument
         line.Value = newValue;
     }
 
+    /// <summary>
+    /// Like <see cref="SetValue"/> but formats the number in the style of the value it
+    /// replaces (see <see cref="IniNumber.FormatLike"/>): FINAL=3.353000 set to 3.9
+    /// becomes FINAL=3.900000. Always invariant culture.
+    /// </summary>
+    public void SetDouble(string section, string key, double value)
+    {
+        var line = FindLast(section, key)
+            ?? throw new KeyNotFoundException($"{Describe()}: cannot set [{section}] {key} — key not found.");
+        line.Value = IniNumber.FormatLike(line.Value, value);
+    }
+
     private KeyValueIniLine? FindLast(string section, string key)
     {
         KeyValueIniLine? found = null;

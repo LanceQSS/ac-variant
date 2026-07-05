@@ -14,7 +14,7 @@ public sealed class DrivetrainIni
     public double FinalRatio
     {
         get => Document.GetDouble("GEARS", "FINAL");
-        set => Document.SetValue("GEARS", "FINAL", IniNumber.Format(value));
+        set => Document.SetDouble("GEARS", "FINAL", value);
     }
 
     /// <summary>[GEARS] COUNT — number of forward gears.</summary>
@@ -30,7 +30,7 @@ public sealed class DrivetrainIni
     public void SetGearRatio(int gear, double ratio)
     {
         ValidateGearNumber(gear);
-        Document.SetValue("GEARS", $"GEAR_{gear}", IniNumber.Format(ratio));
+        Document.SetDouble("GEARS", $"GEAR_{gear}", ratio);
     }
 
     private void ValidateGearNumber(int gear)

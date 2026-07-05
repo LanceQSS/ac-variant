@@ -14,7 +14,7 @@ public sealed class CarIni
     public double TotalMass
     {
         get => Document.GetDouble("BASIC", "TOTALMASS");
-        set => Document.SetValue("BASIC", "TOTALMASS", IniNumber.Format(value));
+        set => Document.SetDouble("BASIC", "TOTALMASS", value);
     }
 
     public byte[] ToBytes() => Document.ToBytes();

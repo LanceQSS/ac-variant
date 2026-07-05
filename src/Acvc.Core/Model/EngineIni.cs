@@ -16,7 +16,7 @@ public sealed partial class EngineIni
     public int Limiter
     {
         get => Document.GetInt("ENGINE_DATA", "LIMITER");
-        set => Document.SetValue("ENGINE_DATA", "LIMITER", IniNumber.Format(value));
+        set => Document.SetDouble("ENGINE_DATA", "LIMITER", value);
     }
 
     /// <summary>[ENGINE_DATA] MINIMUM — idle rpm.</summary>
@@ -59,12 +59,12 @@ public sealed class TurboSection
     public double MaxBoost
     {
         get => _document.GetDouble(SectionName, "MAX_BOOST");
-        set => _document.SetValue(SectionName, "MAX_BOOST", IniNumber.Format(value));
+        set => _document.SetDouble(SectionName, "MAX_BOOST", value);
     }
 
     public double Wastegate
     {
         get => _document.GetDouble(SectionName, "WASTEGATE");
-        set => _document.SetValue(SectionName, "WASTEGATE", IniNumber.Format(value));
+        set => _document.SetDouble(SectionName, "WASTEGATE", value);
     }
 }

@@ -123,12 +123,17 @@ public sealed class PowerLut
     public IEnumerable<(double Rpm, double Value)> Rows
         => _rows.Select(r => (r.Rpm, r.Value));
 
-    /// <summary>Rewrites the value span of row <paramref name="index"/>; rpm and all trivia untouched.</summary>
+    /// <summary>
+    /// Rewrites the value span of row <paramref name="index"/>; rpm and all trivia
+    /// untouched. Formats in the style of the replaced text (decimal-place count
+    /// preserved) and stores the value exactly as it will read back from the emitted
+    /// bytes, so the typed view never disagrees with the file.
+    /// </summary>
     public void SetValue(int index, double newValue)
     {
         var row = RowAt(index);
-        row.ValueText = IniNumber.Format(newValue);
-        row.Value = newValue;
+        row.ValueText = IniNumber.FormatLike(row.ValueText, newValue);
+        row.Value = double.Parse(row.ValueText, NumberStyles.Float, CultureInfo.InvariantCulture);
     }
 
     private DataLutLine RowAt(int index)
