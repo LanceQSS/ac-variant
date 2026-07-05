@@ -13,10 +13,12 @@ public sealed class AcvcConfig
 
 internal static class Program
 {
-    private const int ExitOk = 0;
-    private const int ExitUsage = 1;      // bad arguments, missing paths, config problems
-    private const int ExitFormat = 2;     // data.acd container is structurally broken
-    private const int ExitProtected = 3;  // decrypts to garbage — CSP/x4fab protected mod
+    internal const int ExitOk = 0;
+    internal const int ExitUsage = 1;       // bad arguments, missing paths, config, spec errors
+    internal const int ExitFormat = 2;      // data.acd container is structurally broken
+    internal const int ExitProtected = 3;   // decrypts to garbage — CSP/x4fab protected mod
+    internal const int ExitValidation = 4;  // transform impossible or validation failures
+    internal const int ExitEmit = 5;        // variant folder assembly failed
 
     public static int Main(string[] args)
     {
@@ -45,6 +47,7 @@ internal static class Program
 
         var root = new RootCommand("acvc — compiles tune specs into non-destructive Assetto Corsa car variants");
         root.Subcommands.Add(unpack);
+        root.Subcommands.Add(BuildCommand.Create());
         return root.Parse(args).Invoke();
     }
 
@@ -91,7 +94,7 @@ internal static class Program
     /// AC install root comes from --ac-path or from ac_path in ./acvc.config.toml —
     /// never hardcoded (CLAUDE.md).
     /// </summary>
-    private static string ResolveAcPath(string? overridePath)
+    internal static string ResolveAcPath(string? overridePath)
     {
         if (!string.IsNullOrWhiteSpace(overridePath))
             return overridePath;

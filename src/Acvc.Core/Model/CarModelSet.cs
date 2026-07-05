@@ -28,6 +28,22 @@ public sealed class CarModelSet
         };
     }
 
+    /// <summary>
+    /// The full file map with the four modelled files re-serialized from their
+    /// (possibly transformed) documents; all other files pass through untouched.
+    /// </summary>
+    public Dictionary<string, byte[]> MergedInto(IReadOnlyDictionary<string, byte[]> files)
+    {
+        var result = new Dictionary<string, byte[]>(files.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, bytes) in files)
+            result[name] = bytes;
+        result["car.ini"] = Car.ToBytes();
+        result["engine.ini"] = Engine.ToBytes();
+        result["drivetrain.ini"] = Drivetrain.ToBytes();
+        result[PowerLutFileName] = PowerLut.ToBytes();
+        return result;
+    }
+
     private static byte[] Require(IReadOnlyDictionary<string, byte[]> files, string name)
         => files.TryGetValue(name, out var bytes)
             ? bytes

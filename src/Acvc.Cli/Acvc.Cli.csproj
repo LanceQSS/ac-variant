@@ -16,6 +16,7 @@
     <RootNamespace>Acvc.Cli</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Version>0.4.0</Version>
   </PropertyGroup>
 
 </Project>

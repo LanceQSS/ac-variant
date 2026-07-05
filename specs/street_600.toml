@@ -1,0 +1,17 @@
+# Example tune spec (CLAUDE.md schema), targeting a base-game car.
+[meta]
+source_car = "abarth500"
+tune_name  = "street_600"
+
+[power]
+scale = 1.35
+
+[engine]
+limiter = 7400
+boost = { max = 1.4, wastegate = 1.4 }
+
+[drivetrain]
+final = 3.90
+
+[mass]
+total = 1420
