@@ -65,12 +65,14 @@ public class TuneValidatorTests
     [SkippableTheory]
     [InlineData(1900, 1760)]  // above 1100 × 1.6
     [InlineData(400, 440)]    // below 1100 × 0.4
-    public void Mass_outside_60_percent_of_source_fails_with_value_and_limit(double mass, double limit)
+    public void Mass_outside_60_percent_warns_and_never_blocks(double mass, double limit)
     {
+        // Repriced: a heavy/light build is taste, not an integrity problem.
         Skip.If(ModelTestUtil.TryLoadFixtureCar("abarth500") is null, ModelTestUtil.FixtureSkipReason);
         var result = TunePipeline.Apply(Plan() with { MassTotal = mass }, LoadModels("abarth500"));
 
-        var issue = Assert.Single(result.Failures);
+        Assert.False(result.HasFailures);
+        var issue = Assert.Single(result.Warnings);
         Assert.Equal("mass.range", issue.Rule);
         Assert.Equal(mass, issue.Value);
         Assert.Equal(limit, issue.Limit, 6);
@@ -113,18 +115,21 @@ public class TuneValidatorTests
     // ---- limiter vs peak power -----------------------------------------------
 
     [SkippableFact]
-    public void Limiter_below_peak_power_rpm_fails_with_both_numbers()
+    public void Limiter_below_peak_power_rpm_warns_as_restrictor_style()
     {
         Skip.If(ModelTestUtil.TryLoadFixtureCar("abarth500") is null, ModelTestUtil.FixtureSkipReason);
         // abarth500 usable peak power (torque×rpm over rows ≤ source limiter 6500)
-        // sits at 5500 rpm (85 Nm) — hand-computed from the fixture LUT.
+        // sits at 5500 rpm (85 Nm) — hand-computed from the fixture LUT. Repriced:
+        // capping below peak is a legitimate restrictor-style build, not an error.
         var result = TunePipeline.Apply(Plan() with { Limiter = 5000 }, LoadModels("abarth500"));
 
+        Assert.False(result.HasFailures);
         var issue = Assert.Single(result.Issues);
-        Assert.Equal(ValidationSeverity.Failure, issue.Severity);
+        Assert.Equal(ValidationSeverity.Warning, issue.Severity);
         Assert.Equal("limiter.peak", issue.Rule);
         Assert.Equal(5000, issue.Value);
         Assert.Equal(5500, issue.Limit);
+        Assert.Contains("restrictor", issue.Message);
     }
 
     [SkippableFact]
@@ -140,20 +145,33 @@ public class TuneValidatorTests
     // ---- handling rules (M7) -----------------------------------------------------
 
     [SkippableTheory]
-    [InlineData(1.2, ValidationSeverity.Warning, 1.15)]   // outside ±15%
-    [InlineData(0.7, ValidationSeverity.Warning, 0.85)]
-    [InlineData(1.5, ValidationSeverity.Failure, 1.4)]    // outside ±40%
-    [InlineData(0.5, ValidationSeverity.Failure, 0.6)]
-    public void Grip_scale_thresholds_fire_with_ratio_and_limit(double factor, ValidationSeverity severity, double limit)
+    [InlineData(1.2, 1.15)]   // inner tier: beyond ±15%
+    [InlineData(0.7, 0.85)]
+    [InlineData(1.5, 1.4)]    // outer tier: outside the realistic tire envelope (±40%)
+    [InlineData(0.5, 0.6)]
+    public void Grip_scale_departures_warn_and_never_block(double factor, double limit)
     {
         Skip.If(ModelTestUtil.TryLoadFixtureCar("abarth500") is null, ModelTestUtil.FixtureSkipReason);
         var result = TunePipeline.Apply(Plan() with { GripScale = factor }, LoadModels("abarth500"));
 
+        Assert.False(result.HasFailures);
         var issue = Assert.Single(result.Issues);
-        Assert.Equal(severity, issue.Severity);
+        Assert.Equal(ValidationSeverity.Warning, issue.Severity);
         Assert.Equal("tyres.grip", issue.Rule);
         Assert.Equal(factor, issue.Value, 3);
         Assert.Equal(limit, issue.Limit, 6);
+    }
+
+    [SkippableFact]
+    public void Zero_or_negative_grip_is_an_integrity_failure()
+    {
+        Skip.If(ModelTestUtil.TryLoadFixtureCar("abarth500") is null, ModelTestUtil.FixtureSkipReason);
+        var result = TunePipeline.Apply(Plan() with { GripScale = -0.5 }, LoadModels("abarth500"));
+
+        var issue = Assert.Single(result.Failures);
+        Assert.Equal("tyres.grip", issue.Rule);
+        Assert.Equal(0, issue.Limit);
+        Assert.Contains("cannot be consumed", issue.Message);
     }
 
     [SkippableFact]
@@ -180,18 +198,21 @@ public class TuneValidatorTests
     }
 
     [SkippableTheory]
-    [InlineData(1.2, null, "diff.power", 1.0)]
-    [InlineData(null, -0.1, "diff.coast", 0.0)]
-    public void Diff_lock_outside_unit_range_fails(double? power, double? coast, string rule, double limit)
+    [InlineData(1.2, null, "diff.power", 1.0, ValidationSeverity.Warning)]   // >1 ships in factory mod data and runs
+    [InlineData(null, -0.1, "diff.coast", 0.0, ValidationSeverity.Failure)]  // negative lock: sim can't consume
+    public void Diff_lock_below_zero_fails_above_one_warns(
+        double? power, double? coast, string rule, double limit, ValidationSeverity severity)
     {
         Skip.If(ModelTestUtil.TryLoadFixtureCar("abarth500") is null, ModelTestUtil.FixtureSkipReason);
         var result = TunePipeline.Apply(
             Plan() with { DiffPower = power, DiffCoast = coast }, LoadModels("abarth500"));
 
-        var issue = Assert.Single(result.Failures);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal(severity, issue.Severity);
         Assert.Equal(rule, issue.Rule);
         Assert.Equal(power ?? coast!.Value, issue.Value, 6);
         Assert.Equal(limit, issue.Limit);
+        Assert.Equal(severity == ValidationSeverity.Failure, result.HasFailures);
     }
 
     [Fact]

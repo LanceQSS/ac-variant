@@ -90,11 +90,11 @@ public static class TuneValidator
         var min = source.Mass * ValidationLimits.MassMinRatio;
         var max = source.Mass * ValidationLimits.MassMaxRatio;
         if (mass < min)
-            issues.Add(new ValidationIssue(ValidationSeverity.Failure, "mass.range", mass, min,
-                $"TOTALMASS {mass} kg is below {min} kg (source {source.Mass} kg − 60%)."));
+            issues.Add(new ValidationIssue(ValidationSeverity.Warning, "mass.range", mass, min,
+                $"TOTALMASS {mass} kg is {(1 - mass / source.Mass):P0} below source {source.Mass} kg — outside ±60% of stock."));
         else if (mass > max)
-            issues.Add(new ValidationIssue(ValidationSeverity.Failure, "mass.range", mass, max,
-                $"TOTALMASS {mass} kg is above {max} kg (source {source.Mass} kg + 60%)."));
+            issues.Add(new ValidationIssue(ValidationSeverity.Warning, "mass.range", mass, max,
+                $"TOTALMASS {mass} kg is {(mass / source.Mass - 1):P0} above source {source.Mass} kg — outside ±60% of stock."));
     }
 
     private static void CheckLutShape(CarModelSet models, List<ValidationIssue> issues)
@@ -139,9 +139,8 @@ public static class TuneValidator
 
         var peak = usable.MaxBy(r => r.Rpm * r.Value);
         if (limiter < peak.Rpm)
-            issues.Add(new ValidationIssue(ValidationSeverity.Failure, "limiter.peak", limiter, peak.Rpm,
-                $"LIMITER {limiter} rpm is below the peak-power rpm {peak.Rpm} " +
-                $"(torque×rpm peaks there); the tune could never reach its own peak power."));
+            issues.Add(new ValidationIssue(ValidationSeverity.Warning, "limiter.peak", limiter, peak.Rpm,
+                $"LIMITER {limiter} rpm sits below the usable-range peak-power rpm {peak.Rpm} — restrictor-style build."));
     }
 
     private static void CheckEffectivePowerScale(CarModelSet models, SourceSnapshot source, List<ValidationIssue> issues)
@@ -164,7 +163,7 @@ public static class TuneValidator
         if (maxRatio > ValidationLimits.PowerScaleWarnFactor)
             issues.Add(new ValidationIssue(ValidationSeverity.Warning, "power.scale", maxRatio,
                 ValidationLimits.PowerScaleWarnFactor,
-                $"Torque is scaled up to {maxRatio:0.##}× the source — past the {ValidationLimits.PowerScaleWarnFactor}× sanity threshold."));
+                $"torque up to {maxRatio:0.##}× source — beyond {ValidationLimits.PowerScaleWarnFactor}× of stock."));
     }
 
     /// <summary>
@@ -190,15 +189,24 @@ public static class TuneValidator
             }
         }
 
+        // Zero/negative grip is an integrity failure — the tyre model cannot consume
+        // it. Everything else, however extreme, is a factual warning.
+        if (worstRatio <= 0)
+        {
+            issues.Add(new ValidationIssue(ValidationSeverity.Failure, "tyres.grip", worstRatio, 0,
+                $"grip {worstRatio:0.##}× source — zero or negative grip cannot be consumed by the sim."));
+            return;
+        }
+
         var deviation = Math.Abs(worstRatio - 1);
-        if (deviation > ValidationLimits.GripScaleFailDelta)
-            issues.Add(new ValidationIssue(ValidationSeverity.Failure, "tyres.grip", worstRatio,
-                worstRatio > 1 ? 1 + ValidationLimits.GripScaleFailDelta : 1 - ValidationLimits.GripScaleFailDelta,
-                $"Tyre grip is effectively scaled ×{worstRatio:0.###} — outside the ±{ValidationLimits.GripScaleFailDelta:P0} limit."));
+        if (deviation > ValidationLimits.GripScaleEnvelopeDelta)
+            issues.Add(new ValidationIssue(ValidationSeverity.Warning, "tyres.grip", worstRatio,
+                worstRatio > 1 ? 1 + ValidationLimits.GripScaleEnvelopeDelta : 1 - ValidationLimits.GripScaleEnvelopeDelta,
+                $"grip {worstRatio:0.##}× source — outside the realistic tire envelope (±{ValidationLimits.GripScaleEnvelopeDelta:P0})."));
         else if (deviation > ValidationLimits.GripScaleWarnDelta)
             issues.Add(new ValidationIssue(ValidationSeverity.Warning, "tyres.grip", worstRatio,
                 worstRatio > 1 ? 1 + ValidationLimits.GripScaleWarnDelta : 1 - ValidationLimits.GripScaleWarnDelta,
-                $"Tyre grip is effectively scaled ×{worstRatio:0.###} — past the ±{ValidationLimits.GripScaleWarnDelta:P0} sanity threshold."));
+                $"grip {worstRatio:0.##}× source — beyond ±{ValidationLimits.GripScaleWarnDelta:P0} of stock."));
     }
 
     private static void CheckBrakeTorqueScale(CarModelSet models, SourceSnapshot source, List<ValidationIssue> issues)
@@ -219,15 +227,15 @@ public static class TuneValidator
         var ratio = after / before;
         if (ratio <= 0)
             issues.Add(new ValidationIssue(ValidationSeverity.Failure, "brakes.torque", ratio, 0,
-                $"Brake MAX_TORQUE is effectively scaled ×{ratio:0.###} — zero or negative braking is not a tune."));
+                $"brake torque {ratio:0.##}× source — zero or negative braking cannot be consumed by the sim."));
         else if (ratio > ValidationLimits.BrakeTorqueScaleWarnHigh)
             issues.Add(new ValidationIssue(ValidationSeverity.Warning, "brakes.torque", ratio,
                 ValidationLimits.BrakeTorqueScaleWarnHigh,
-                $"Brake MAX_TORQUE is effectively scaled ×{ratio:0.###} — past the ×{ValidationLimits.BrakeTorqueScaleWarnHigh} sanity threshold."));
+                $"brake torque {ratio:0.##}× source — above {ValidationLimits.BrakeTorqueScaleWarnHigh}× of stock."));
         else if (ratio < ValidationLimits.BrakeTorqueScaleWarnLow)
             issues.Add(new ValidationIssue(ValidationSeverity.Warning, "brakes.torque", ratio,
                 ValidationLimits.BrakeTorqueScaleWarnLow,
-                $"Brake MAX_TORQUE is effectively scaled ×{ratio:0.###} — below the ×{ValidationLimits.BrakeTorqueScaleWarnLow} sanity threshold."));
+                $"brake torque {ratio:0.##}× source — below {ValidationLimits.BrakeTorqueScaleWarnLow}× of stock."));
     }
 
     /// <summary>
@@ -259,10 +267,10 @@ public static class TuneValidator
                 return;
             if (after < ValidationLimits.DiffLockMin)
                 issues.Add(new ValidationIssue(ValidationSeverity.Failure, rule, after, ValidationLimits.DiffLockMin,
-                    $"{rule} = {after} is below {ValidationLimits.DiffLockMin}; lock fractions live in [0, 1]."));
+                    $"{rule} = {after} — a negative lock fraction cannot be consumed by the sim."));
             else if (after > ValidationLimits.DiffLockMax)
-                issues.Add(new ValidationIssue(ValidationSeverity.Failure, rule, after, ValidationLimits.DiffLockMax,
-                    $"{rule} = {after} is above {ValidationLimits.DiffLockMax}; lock fractions live in [0, 1]."));
+                issues.Add(new ValidationIssue(ValidationSeverity.Warning, rule, after, ValidationLimits.DiffLockMax,
+                    $"{rule} = {after} — above the nominal 0–1 lock-fraction range (factory mod data ships values above 1 and runs)."));
         }
     }
 

@@ -66,6 +66,9 @@ suspension/aero workshop — ten well-validated transforms, a live dyno preview
 that matches the built output exactly, and nothing else. Advanced users get a
 loose `data/` folder in every variant to take further by hand.
 
+Warnings inform, never block; the tool only refuses files that would break the
+sim. Want a 4× power meme build? It'll warn you, then build it.
+
 ## Download & source
 
 - GitHub (source + releases): https://github.com/LanceQSS/ac-variant

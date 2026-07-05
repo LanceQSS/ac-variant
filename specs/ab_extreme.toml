@@ -1,0 +1,17 @@
+# Repricing acceptance: extreme-but-finite everywhere — must build with
+# warnings only (failures are reserved for output the sim cannot consume).
+[meta]
+source_car = "abarth500"
+tune_name  = "ab_extreme"
+
+[power]
+scale = 4.0
+
+[mass]
+total = 550
+
+[tyres]
+grip_scale = 1.6
+
+[diff]
+power = 1.2

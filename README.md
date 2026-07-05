@@ -22,8 +22,8 @@ specs, working audio, and linked skins. The original car is never touched.
 - **Specs are the shareable unit.** A tune is a tiny `.toml` you can post anywhere;
   anyone who owns the same car rebuilds the variant locally. The tool never
   packages or redistributes car data.
-- **Validation with teeth**: physically nonsensical tunes are refused before
-  anything is written; aggressive-but-legal tunes get warnings with numbers.
+- **Validation that informs**: warnings inform, never block; the tool only
+  refuses files that would break the sim. Realism departures are your call.
 
 ## Honest numbers
 

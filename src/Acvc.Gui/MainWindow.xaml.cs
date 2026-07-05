@@ -112,21 +112,38 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             FinalStock.Text = _vm.FinalStockText;
             MassStock.Text = _vm.MassStockText;
             DiffStock.Text = _vm.DiffStockText;
+
+            PowerScaleBox.Text = _vm.PowerScale.ToString("0.00", CultureInfo.InvariantCulture);
+            GripScaleBox.Text = _vm.GripScale.ToString("0.00", CultureInfo.InvariantCulture);
+            BrakeScaleBox.Text = _vm.BrakeScale.ToString("0.00", CultureInfo.InvariantCulture);
         }
         finally
         {
             _syncing = false;
         }
-        UpdateSliderCaptions();
+        UpdateDiffCaption();
     }
 
-    private void UpdateSliderCaptions()
+    private void UpdateDiffCaption()
+        => DiffPowerValue.Text = DiffPowerSlider.Value.ToString("0.00", CultureInfo.InvariantCulture)
+                                 + " / " + DiffCoastSlider.Value.ToString("0.00", CultureInfo.InvariantCulture);
+
+    private static double ParseOr(string text, double fallback)
+        => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : fallback;
+
+    private void SetBoxGuarded(System.Windows.Controls.TextBox box, double value)
     {
-        PowerScaleValue.Text = $"× {PowerScaleSlider.Value.ToString("0.00", CultureInfo.InvariantCulture)}";
-        GripValue.Text = $"× {GripSlider.Value.ToString("0.00", CultureInfo.InvariantCulture)}";
-        BrakeValue.Text = $"× {BrakeSlider.Value.ToString("0.00", CultureInfo.InvariantCulture)}";
-        DiffPowerValue.Text = DiffPowerSlider.Value.ToString("0.00", CultureInfo.InvariantCulture)
-                              + " / " + DiffCoastSlider.Value.ToString("0.00", CultureInfo.InvariantCulture);
+        _syncing = true;
+        try
+        {
+            box.Text = value.ToString("0.00", CultureInfo.InvariantCulture);
+        }
+        finally
+        {
+            _syncing = false;
+        }
     }
 
     private void RenderPreview()
@@ -195,14 +212,17 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private void PushControlsToVm()
     {
         _vm.TuneName = TuneNameBox.Text;
-        _vm.PowerScale = PowerScaleSlider.Value;
+        // The value BOXES are authoritative for the three scale factors: they accept
+        // values beyond the slider range (sliders are bounded convenience inputs;
+        // the validator warns instead of blocking, so the UI must not clamp either).
+        _vm.PowerScale = ParseOr(PowerScaleBox.Text, _vm.PowerScale);
+        _vm.GripScale = ParseOr(GripScaleBox.Text, _vm.GripScale);
+        _vm.BrakeScale = ParseOr(BrakeScaleBox.Text, _vm.BrakeScale);
         _vm.LimiterText = LimiterBox.Text;
         _vm.BoostMaxText = BoostMaxBox.Text;
         _vm.BoostWastegateText = BoostWastegateBox.Text;
         _vm.FinalDriveText = FinalBox.Text;
         _vm.MassText = MassBox.Text;
-        _vm.GripScale = GripSlider.Value;
-        _vm.BrakeScale = BrakeSlider.Value;
         _vm.DiffPower = DiffPowerSlider.Value;
         _vm.DiffCoast = DiffCoastSlider.Value;
     }
@@ -211,7 +231,42 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         if (_syncing || !IsLoaded)
             return;
-        UpdateSliderCaptions();
+        // A slider drag rewrites its own value box; other boxes keep typed values.
+        if (ReferenceEquals(sender, PowerScaleSlider))
+            SetBoxGuarded(PowerScaleBox, PowerScaleSlider.Value);
+        else if (ReferenceEquals(sender, GripSlider))
+            SetBoxGuarded(GripScaleBox, GripSlider.Value);
+        else if (ReferenceEquals(sender, BrakeSlider))
+            SetBoxGuarded(BrakeScaleBox, BrakeSlider.Value);
+        if (sender is System.Windows.Controls.Slider)
+            UpdateDiffCaption();
+        PushControlsToVm();
+        _vm.SchedulePreview();
+    }
+
+    private void OnScaleBoxChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_syncing || !IsLoaded)
+            return;
+        // Typed values drive the VM; the paired slider follows only within its range.
+        var (box, slider) = sender switch
+        {
+            _ when ReferenceEquals(sender, PowerScaleBox) => (PowerScaleBox, PowerScaleSlider),
+            _ when ReferenceEquals(sender, GripScaleBox) => (GripScaleBox, GripSlider),
+            _ => (BrakeScaleBox, BrakeSlider),
+        };
+        if (double.TryParse(box.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+        {
+            _syncing = true;
+            try
+            {
+                slider.Value = Math.Clamp(value, slider.Minimum, slider.Maximum);
+            }
+            finally
+            {
+                _syncing = false;
+            }
+        }
         PushControlsToVm();
         _vm.SchedulePreview();
     }

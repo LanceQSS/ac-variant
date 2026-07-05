@@ -229,4 +229,41 @@ public class VariantBuilderTests : IDisposable
         Assert.Null(outcome.UiPatch);
         Assert.False(Directory.Exists(outRoot) && Directory.GetFileSystemEntries(outRoot).Length > 0);
     }
+
+    [SkippableFact]
+    public void Extreme_but_finite_spec_warns_only_and_builds_end_to_end()
+    {
+        // Repriced validator: taste departures (grip 1.6×, power 4×, mass −50%,
+        // diff 1.2) warn; only integrity problems block.
+        var fixture = Fixtures.CarFolders()
+            .FirstOrDefault(d => Path.GetFileName(d).Equals("abarth500", StringComparison.OrdinalIgnoreCase));
+        Skip.If(fixture is null, ModelTestUtil.FixtureSkipReason);
+
+        var source = Path.Combine(_root, "abarth500");
+        Directory.CreateDirectory(Path.Combine(source, "skins", "default"));
+        File.Copy(Path.Combine(fixture!, "data.acd"), Path.Combine(source, "data.acd"));
+        File.WriteAllText(Path.Combine(source, "skins", "default", "skin.ini"), "[SKIN]\nNAME=d\n");
+
+        var plan = new TunePlan
+        {
+            SourceCar = "abarth500",
+            TuneName = "extreme",
+            PowerScale = 4.0,
+            GripScale = 1.6,
+            MassTotal = 550,   // −50%: inside the ±60% envelope, no warning expected
+            DiffPower = 1.2,
+        };
+        var outcome = VariantBuilder.Build(source, plan, Path.Combine(_root, "out"),
+            force: false, SkinsMode.CopyFirst, "[meta]\n", "extreme.toml");
+
+        Assert.False(outcome.Validation.HasFailures);
+        Assert.NotNull(outcome.Emit);
+        var warningRules = outcome.Validation.Warnings.Select(w => w.Rule).ToList();
+        Assert.Contains("power.scale", warningRules);
+        Assert.Contains("tyres.grip", warningRules);
+        Assert.Contains("diff.power", warningRules);
+
+        var carIni = File.ReadAllText(Path.Combine(outcome.Emit!.VariantPath, "data", "car.ini"));
+        Assert.Contains("TOTALMASS=550", carIni);
+    }
 }

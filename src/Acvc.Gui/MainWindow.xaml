@@ -72,8 +72,9 @@
                     <StackPanel>
                         <DockPanel Margin="0,2">
                             <TextBlock Text="Power scale" Width="110" VerticalAlignment="Center" />
-                            <TextBlock x:Name="PowerScaleValue" DockPanel.Dock="Right" Width="120"
-                                       VerticalAlignment="Center" TextAlignment="Right" />
+                            <ui:TextBox x:Name="PowerScaleBox" DockPanel.Dock="Right" Width="90"
+                                        TextAlignment="Right" TextChanged="OnScaleBoxChanged"
+                                        ToolTip="Type any value — the slider range is just a convenience" />
                             <Slider x:Name="PowerScaleSlider" Minimum="0.5" Maximum="2.5" Value="1.0"
                                     TickFrequency="0.01" IsSnapToTickEnabled="True"
                                     ValueChanged="OnAnyControlChanged" />
@@ -116,16 +117,18 @@
                     <StackPanel>
                         <DockPanel Margin="0,2">
                             <TextBlock Text="Grip scale" Width="110" VerticalAlignment="Center" />
-                            <TextBlock x:Name="GripValue" DockPanel.Dock="Right" Width="120"
-                                       VerticalAlignment="Center" TextAlignment="Right" />
+                            <ui:TextBox x:Name="GripScaleBox" DockPanel.Dock="Right" Width="90"
+                                        TextAlignment="Right" TextChanged="OnScaleBoxChanged"
+                                        ToolTip="Type any value — the slider range is just a convenience" />
                             <Slider x:Name="GripSlider" Minimum="0.6" Maximum="1.4" Value="1.0"
                                     TickFrequency="0.01" IsSnapToTickEnabled="True"
                                     ValueChanged="OnAnyControlChanged" />
                         </DockPanel>
                         <DockPanel Margin="0,2">
                             <TextBlock Text="Brake torque" Width="110" VerticalAlignment="Center" />
-                            <TextBlock x:Name="BrakeValue" DockPanel.Dock="Right" Width="120"
-                                       VerticalAlignment="Center" TextAlignment="Right" />
+                            <ui:TextBox x:Name="BrakeScaleBox" DockPanel.Dock="Right" Width="90"
+                                        TextAlignment="Right" TextChanged="OnScaleBoxChanged"
+                                        ToolTip="Type any value — the slider range is just a convenience" />
                             <Slider x:Name="BrakeSlider" Minimum="0.3" Maximum="1.8" Value="1.0"
                                     TickFrequency="0.01" IsSnapToTickEnabled="True"
                                     ValueChanged="OnAnyControlChanged" />

@@ -59,13 +59,12 @@ Design rule: transforms never touch the filesystem. Pipeline is `load → transf
 
 Explicitly still out: springs, ARBs, dampers, geometry, aero, preload, front share, drivetrain conversion (RWD↔AWD — requires sections the source car may not have; not a one-key change).
 
-Validation after transform: mass > 0 and within ±60% of source; LUT monotonic in RPM; no NaN; limiter above peak-power RPM; warn (not fail) past sanity thresholds like >3× power.
+Validation principle (repriced post-beta.1): **failures exist only for output the sim cannot consume (integrity); realism departures are warnings and never block a build. The tool judges validity, not taste.** Warning texts state the departure factually, never prescriptively.
 
-ValidationLimits.cs additions (named constants, like the originals):
-- grip_scale: warn outside ±15%, fail outside ±40%.
-- brakes.torque_scale: warn >1.5 or <0.5, fail ≤ 0.
-- diff.power / diff.coast: fail outside [0, 1].
-Repricing note applies to these as to the originals.
+- FAIL (integrity): non-finite values; LUT rpm not strictly increasing; mass ≤ 0; brakes.torque_scale ≤ 0; grip_scale ≤ 0; diff power/coast < 0.
+- WARN (realism): mass outside ±60% of source; grip outside ±15% (inner tier) and outside ±40% (outer tier, "outside the realistic tire envelope"); torque scaled > 3×; limiter raised > 20%; tuned limiter below the usable-range peak-power rpm (restrictor-style build); brakes > 1.5× or < 0.5×; diff power/coast above 1 (factory mod data ships POWER=1.5 and runs).
+
+All thresholds remain named constants in ValidationLimits.cs.
 
 ## UI metadata regeneration
 After transforms, regenerate in the variant's `ui/ui_car.json`:
