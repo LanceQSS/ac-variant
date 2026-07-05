@@ -28,4 +28,8 @@ public sealed record TunePlan
     public double? FinalDrive { get; init; }
     public IReadOnlyList<double>? Gears { get; init; }
     public double? MassTotal { get; init; }
+    public double? GripScale { get; init; }
+    public double? BrakeTorqueScale { get; init; }
+    public double? DiffPower { get; init; }
+    public double? DiffCoast { get; init; }
 }

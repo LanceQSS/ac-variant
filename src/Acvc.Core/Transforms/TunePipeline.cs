@@ -29,6 +29,12 @@ public static class TunePipeline
             DrivetrainGearsTransform.Apply(models.Drivetrain, gears);
         if (plan.MassTotal is { } mass)
             MassTotalTransform.Apply(models.Car, mass);
+        if (plan.GripScale is { } grip)
+            TyresGripScaleTransform.Apply(models.Tyres, grip);
+        if (plan.BrakeTorqueScale is { } brakeScale)
+            BrakesTorqueScaleTransform.Apply(models.Brakes, brakeScale);
+        if (plan.DiffPower is not null || plan.DiffCoast is not null)
+            DiffLockTransform.Apply(models.Drivetrain, plan.DiffPower, plan.DiffCoast);
 
         return TuneValidator.Validate(models, source);
     }

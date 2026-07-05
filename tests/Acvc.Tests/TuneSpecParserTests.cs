@@ -23,6 +23,16 @@ public class TuneSpecParserTests
 
         [mass]
         total = 1420
+
+        [tyres]
+        grip_scale = 1.10
+
+        [brakes]
+        torque_scale = 1.15
+
+        [diff]
+        power = 0.45
+        coast = 0.25
         """;
 
     [Fact]
@@ -40,6 +50,19 @@ public class TuneSpecParserTests
         Assert.Equal(3.90, plan.FinalDrive);
         Assert.Equal(new[] { 3.2, 2.1, 1.5, 1.1, 0.9 }, plan.Gears!);
         Assert.Equal(1420.0, plan.MassTotal);
+        Assert.Equal(1.10, plan.GripScale);
+        Assert.Equal(1.15, plan.BrakeTorqueScale);
+        Assert.Equal(0.45, plan.DiffPower);
+        Assert.Equal(0.25, plan.DiffCoast);
+    }
+
+    [Fact]
+    public void Diff_table_allows_power_only()
+    {
+        var plan = TuneSpecParser.Parse(
+            "[meta]\nsource_car = \"a\"\ntune_name = \"t\"\n[diff]\npower = 0.6\n");
+        Assert.Equal(0.6, plan.DiffPower);
+        Assert.Null(plan.DiffCoast);
     }
 
     [Fact]
@@ -73,6 +96,9 @@ public class TuneSpecParserTests
     [InlineData("[meta]\nsource_car = \"a\"\ntune_name = \"t\"\n[drivetrain]\nfinale = 3.9\n", "finale", "[drivetrain]")]
     [InlineData("[meta]\nsource_car = \"a\"\ntune_name = \"t\"\n[mass]\nweight = 1000\n", "weight", "[mass]")]
     [InlineData("[meta]\nsource_car = \"a\"\ntune_name = \"t\"\n[power]\ncurve = [ { from = 1, to = 2, factor = 1.1, upto = 3 } ]\n", "upto", "curve")]
+    [InlineData("[meta]\nsource_car = \"a\"\ntune_name = \"t\"\n[tyres]\ngrip = 1.1\n", "grip", "[tyres]")]
+    [InlineData("[meta]\nsource_car = \"a\"\ntune_name = \"t\"\n[brakes]\ntorque = 1.1\n", "torque", "[brakes]")]
+    [InlineData("[meta]\nsource_car = \"a\"\ntune_name = \"t\"\n[diff]\nlock = 0.5\n", "lock", "[diff]")]
     public void Unknown_key_is_a_hard_error_naming_key_and_table(string toml, string key, string table)
     {
         var ex = Assert.Throws<TuneSpecException>(() => TuneSpecParser.Parse(toml));

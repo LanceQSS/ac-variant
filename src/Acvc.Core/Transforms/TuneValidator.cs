@@ -6,12 +6,52 @@ namespace Acvc.Core.Transforms;
 public sealed record SourceSnapshot(
     double Mass,
     int Limiter,
-    IReadOnlyList<(double Rpm, double Value)> LutRows)
+    IReadOnlyList<(double Rpm, double Value)> LutRows,
+    IReadOnlyDictionary<string, double> GripRefs,
+    double? BrakeMaxTorque,
+    double? DiffPower,
+    double? DiffCoast)
 {
-    public static SourceSnapshot Capture(CarModelSet models) => new(
-        models.Car.TotalMass,
-        models.Engine.Limiter,
-        models.PowerLut.Rows.ToList());
+    public static SourceSnapshot Capture(CarModelSet models)
+    {
+        var gripRefs = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        if (models.Tyres is { } tyres)
+            foreach (var section in tyres.CompoundSections)
+                foreach (var (key, value) in tyres.GripValues(section))
+                    gripRefs[$"{section}/{key}"] = value;
+
+        double? brakeTorque = null;
+        if (models.Brakes is { HasMaxTorque: true } brakes)
+            brakeTorque = SafeRead(() => brakes.MaxTorque);
+
+        double? diffPower = null, diffCoast = null;
+        if (models.Drivetrain.HasDifferential)
+        {
+            diffPower = SafeRead(() => models.Drivetrain.DiffPower);
+            diffCoast = SafeRead(() => models.Drivetrain.DiffCoast);
+        }
+
+        return new SourceSnapshot(
+            models.Car.TotalMass,
+            models.Engine.Limiter,
+            models.PowerLut.Rows.ToList(),
+            gripRefs,
+            brakeTorque,
+            diffPower,
+            diffCoast);
+    }
+
+    private static double? SafeRead(Func<double> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or FormatException)
+        {
+            return null; // absent/unparseable source value: nothing to compare against
+        }
+    }
 }
 
 /// <summary>
@@ -30,6 +70,9 @@ public static class TuneValidator
         CheckLimiterVsPeakPower(models, source, issues);
         CheckEffectivePowerScale(models, source, issues);
         CheckLimiterRaise(models, source, issues);
+        CheckGripScale(models, source, issues);
+        CheckBrakeTorqueScale(models, source, issues);
+        CheckDiffLock(models, source, issues);
 
         return new ValidationResult(issues);
     }
@@ -122,6 +165,105 @@ public static class TuneValidator
             issues.Add(new ValidationIssue(ValidationSeverity.Warning, "power.scale", maxRatio,
                 ValidationLimits.PowerScaleWarnFactor,
                 $"Torque is scaled up to {maxRatio:0.##}× the source — past the {ValidationLimits.PowerScaleWarnFactor}× sanity threshold."));
+    }
+
+    /// <summary>
+    /// Judges the EFFECTIVE grip ratio per key against the pre-transform snapshot
+    /// (same philosophy as the power rule: measure what was written, don't trust the
+    /// spec). One issue for the worst deviation. No-op tunes are ratio 1 and clean.
+    /// </summary>
+    private static void CheckGripScale(CarModelSet models, SourceSnapshot source, List<ValidationIssue> issues)
+    {
+        if (models.Tyres is not { } tyres || source.GripRefs.Count == 0)
+            return;
+
+        double worstRatio = 1;
+        foreach (var section in tyres.CompoundSections)
+        {
+            foreach (var (key, value) in tyres.GripValues(section))
+            {
+                if (!source.GripRefs.TryGetValue($"{section}/{key}", out var before) || Math.Abs(before) < 1e-12)
+                    continue;
+                var ratio = value / before;
+                if (Math.Abs(ratio - 1) > Math.Abs(worstRatio - 1))
+                    worstRatio = ratio;
+            }
+        }
+
+        var deviation = Math.Abs(worstRatio - 1);
+        if (deviation > ValidationLimits.GripScaleFailDelta)
+            issues.Add(new ValidationIssue(ValidationSeverity.Failure, "tyres.grip", worstRatio,
+                worstRatio > 1 ? 1 + ValidationLimits.GripScaleFailDelta : 1 - ValidationLimits.GripScaleFailDelta,
+                $"Tyre grip is effectively scaled ×{worstRatio:0.###} — outside the ±{ValidationLimits.GripScaleFailDelta:P0} limit."));
+        else if (deviation > ValidationLimits.GripScaleWarnDelta)
+            issues.Add(new ValidationIssue(ValidationSeverity.Warning, "tyres.grip", worstRatio,
+                worstRatio > 1 ? 1 + ValidationLimits.GripScaleWarnDelta : 1 - ValidationLimits.GripScaleWarnDelta,
+                $"Tyre grip is effectively scaled ×{worstRatio:0.###} — past the ±{ValidationLimits.GripScaleWarnDelta:P0} sanity threshold."));
+    }
+
+    private static void CheckBrakeTorqueScale(CarModelSet models, SourceSnapshot source, List<ValidationIssue> issues)
+    {
+        if (models.Brakes is not { HasMaxTorque: true } brakes || source.BrakeMaxTorque is not { } before || before <= 0)
+            return;
+
+        double after;
+        try
+        {
+            after = brakes.MaxTorque;
+        }
+        catch (FormatException)
+        {
+            return; // unreadable value would have been caught by the file checks
+        }
+
+        var ratio = after / before;
+        if (ratio <= 0)
+            issues.Add(new ValidationIssue(ValidationSeverity.Failure, "brakes.torque", ratio, 0,
+                $"Brake MAX_TORQUE is effectively scaled ×{ratio:0.###} — zero or negative braking is not a tune."));
+        else if (ratio > ValidationLimits.BrakeTorqueScaleWarnHigh)
+            issues.Add(new ValidationIssue(ValidationSeverity.Warning, "brakes.torque", ratio,
+                ValidationLimits.BrakeTorqueScaleWarnHigh,
+                $"Brake MAX_TORQUE is effectively scaled ×{ratio:0.###} — past the ×{ValidationLimits.BrakeTorqueScaleWarnHigh} sanity threshold."));
+        else if (ratio < ValidationLimits.BrakeTorqueScaleWarnLow)
+            issues.Add(new ValidationIssue(ValidationSeverity.Warning, "brakes.torque", ratio,
+                ValidationLimits.BrakeTorqueScaleWarnLow,
+                $"Brake MAX_TORQUE is effectively scaled ×{ratio:0.###} — below the ×{ValidationLimits.BrakeTorqueScaleWarnLow} sanity threshold."));
+    }
+
+    /// <summary>
+    /// Lock fractions must land in [0,1] — but only values the tune CHANGED are
+    /// judged, so a stock car that already ships odd diff numbers still builds
+    /// no-op tunes (the tool judges tunes, not Kunos/mod authors).
+    /// </summary>
+    private static void CheckDiffLock(CarModelSet models, SourceSnapshot source, List<ValidationIssue> issues)
+    {
+        if (!models.Drivetrain.HasDifferential)
+            return;
+
+        CheckOne("diff.power", source.DiffPower, () => models.Drivetrain.DiffPower);
+        CheckOne("diff.coast", source.DiffCoast, () => models.Drivetrain.DiffCoast);
+
+        void CheckOne(string rule, double? before, Func<double> read)
+        {
+            double after;
+            try
+            {
+                after = read();
+            }
+            catch (Exception ex) when (ex is KeyNotFoundException or FormatException)
+            {
+                return;
+            }
+            var changed = before is not { } b || Math.Abs(after - b) > 1e-9;
+            if (!changed)
+                return;
+            if (after < ValidationLimits.DiffLockMin)
+                issues.Add(new ValidationIssue(ValidationSeverity.Failure, rule, after, ValidationLimits.DiffLockMin,
+                    $"{rule} = {after} is below {ValidationLimits.DiffLockMin}; lock fractions live in [0, 1]."));
+            else if (after > ValidationLimits.DiffLockMax)
+                issues.Add(new ValidationIssue(ValidationSeverity.Failure, rule, after, ValidationLimits.DiffLockMax,
+                    $"{rule} = {after} is above {ValidationLimits.DiffLockMax}; lock fractions live in [0, 1]."));
+        }
     }
 
     private static void CheckLimiterRaise(CarModelSet models, SourceSnapshot source, List<ValidationIssue> issues)

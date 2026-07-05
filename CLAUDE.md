@@ -53,7 +53,7 @@ Design rule: transforms never touch the filesystem. Pipeline is `load → transf
 - `engine.boost` — set MAX_BOOST / WASTEGATE in `[TURBO_n]` sections; error if no turbo section exists.
 - `drivetrain.final` / `drivetrain.gears` — final drive and per-gear ratios.
 - `mass.total` — TOTALMASS in car.ini.
-- `tyres.grip_scale` — scales lateral/longitudinal reference grip in **every compound section** of tyres.ini. Tyre-model versions differ in key names across AC's history: derive the per-VERSION key map from the M6 survey results, never from assumption. Unknown VERSION = transform error naming the version found; never a silent skip.
+- `tyres.grip_scale` — scales lateral/longitudinal grip in **every compound section** of tyres.ini. **Key map settled from the M6 survey: supported tyre model is VERSION=10 only.** Scale BOTH grip families by the same factor — `DX_REF`/`DY_REF` and the legacy `DX0`/`DX1`/`DY0`/`DY1` (all 184 surveyed cars carry both; which family V10 actually reads is not assumption-safe, and uniform scaling is correct regardless — scaling both keys of a family scales the whole grip curve). `FRICTION_LIMIT_ANGLE` untouched. Any other VERSION (or missing VERSION), or curve-based grip — a compound with a non-disabled `DX_CURVE`/`DY_CURVE` (real case: nohesi_realistic_audi_rs3 ships `DX_CURVE=tire_*.lut` with its REF keys marked unused; `DX_CURVE=0` or empty counts as disabled) — is a clear transform error naming the cause. All other transforms on such a car still work.
 - `brakes.torque_scale` — scales MAX_TORQUE in brakes.ini.
 - `diff.power` / `diff.coast` — set `[DIFFERENTIAL]` POWER / COAST (0–1 lock fractions); error if the section is absent.
 
@@ -125,7 +125,7 @@ Do not copy all skin folders (ACCT duplicated gigabytes; its top complaint). **S
 
 ## GUI (Acvc.Gui)
 - WPF on .NET 8, WPF-UI (Fluent) theme. Windows-only by decision.
-- Single main window: car picker (search box; Kunos/mod badge; encrypted cars visible but grayed with the reason as tooltip — never a late error), two transform groups (**Power & Drivetrain**, **Handling**), tune-name field, live preview pane (dyno plot + bhp/Nm/kg/pwratio with deltas vs stock, recomputed through Core on every change), Build button with result toast and an "open variant folder" action.
+- Single main window: car picker (search box; badges: **"Kunos" (tested)** vs **"Mod — best effort"** — no hard block on mod cars; encrypted cars visible but grayed with the reason as tooltip — never a late error), two transform groups (**Power & Drivetrain**, **Handling**), tune-name field, live preview pane (dyno plot + bhp/Nm/kg/pwratio with deltas vs stock, recomputed through Core on every change), Build button with result toast and an "open variant folder" action.
 - AC path: autodetect Steam install (registry SteamPath + libraryfolders.vdf parse for secondary libraries), manual folder picker fallback, persisted to acvc.config.toml. Never hardcoded (existing rule).
 - Error surfaces show Core's messages **verbatim** — Core already writes user-grade errors; the GUI must not paraphrase them.
 - Rolling log at %LOCALAPPDATA%\acvc\logs (spec + outcome per build). The bug-report affordance is a button that opens the log folder.
@@ -135,7 +135,7 @@ Do not copy all skin folders (ACCT duplicated gigabytes; its top complaint). **S
 - License: MIT. LICENSE at root. Public GitHub repo.
 - **History hygiene gate before the repo goes public:** `CarTuner/` (third-party compiled tool + QuickBMS) must never appear in public history — redistributing it violates the same rules we honor. If it was ever committed, rewrite history (git filter-repo) before publishing. Fixtures must also be absent from history (should already hold — verify, don't assume).
 - No installer for beta: single-file exe. Version in title bar and readme.
-- docs/overtake-post.md: what it does, honest-numbers policy stated upfront, encrypted-mods limitation stated upfront, maintenance note ("open source, PRs welcome, maintained on a slow cycle").
+- docs/overtake-post.md: what it does, honest-numbers policy stated upfront, encrypted-mods limitation stated upfront, support posture stated upfront (**Kunos cars tested; mod cars best-effort** — loose-data and standard-cipher mods build, encrypted mods refused), maintenance note ("open source, PRs welcome, maintained on a slow cycle").
 - Public name: OPEN decision — "acvc" is a placeholder until chosen; rename touches exe, title bar, repo, post.
 - Beta path: GitHub pre-release tested on a clean second machine (no dev tools) before the Overtake post.
 

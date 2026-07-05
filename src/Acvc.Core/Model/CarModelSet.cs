@@ -13,6 +13,10 @@ public sealed class CarModelSet
     public required PowerLut PowerLut { get; init; }
     /// <summary>File name the LUT came from (engine.ini POWER_CURVE).</summary>
     public required string PowerLutFileName { get; init; }
+    /// <summary>Null when the car has no tyres.ini; the grip transform errors then.</summary>
+    public TyresIni? Tyres { get; init; }
+    /// <summary>Null when the car has no brakes.ini; the brake transform errors then.</summary>
+    public BrakesIni? Brakes { get; init; }
 
     public static CarModelSet FromFiles(IReadOnlyDictionary<string, byte[]> files)
     {
@@ -25,6 +29,8 @@ public sealed class CarModelSet
             Drivetrain = new DrivetrainIni(IniDocument.Parse(Require(files, "drivetrain.ini"), "drivetrain.ini")),
             PowerLut = PowerLut.Parse(Require(files, lutName), lutName),
             PowerLutFileName = lutName,
+            Tyres = files.TryGetValue("tyres.ini", out var tyres) ? TyresIni.Parse(tyres) : null,
+            Brakes = files.TryGetValue("brakes.ini", out var brakes) ? BrakesIni.Parse(brakes) : null,
         };
     }
 
@@ -41,6 +47,10 @@ public sealed class CarModelSet
         result["engine.ini"] = Engine.ToBytes();
         result["drivetrain.ini"] = Drivetrain.ToBytes();
         result[PowerLutFileName] = PowerLut.ToBytes();
+        if (Tyres is not null)
+            result["tyres.ini"] = Tyres.ToBytes();
+        if (Brakes is not null)
+            result["brakes.ini"] = Brakes.ToBytes();
         return result;
     }
 

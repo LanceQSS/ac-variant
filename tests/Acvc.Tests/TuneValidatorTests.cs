@@ -137,6 +137,84 @@ public class TuneValidatorTests
         Assert.Empty(result.Failures);
     }
 
+    // ---- handling rules (M7) -----------------------------------------------------
+
+    [SkippableTheory]
+    [InlineData(1.2, ValidationSeverity.Warning, 1.15)]   // outside ±15%
+    [InlineData(0.7, ValidationSeverity.Warning, 0.85)]
+    [InlineData(1.5, ValidationSeverity.Failure, 1.4)]    // outside ±40%
+    [InlineData(0.5, ValidationSeverity.Failure, 0.6)]
+    public void Grip_scale_thresholds_fire_with_ratio_and_limit(double factor, ValidationSeverity severity, double limit)
+    {
+        Skip.If(ModelTestUtil.TryLoadFixtureCar("abarth500") is null, ModelTestUtil.FixtureSkipReason);
+        var result = TunePipeline.Apply(Plan() with { GripScale = factor }, LoadModels("abarth500"));
+
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal(severity, issue.Severity);
+        Assert.Equal("tyres.grip", issue.Rule);
+        Assert.Equal(factor, issue.Value, 3);
+        Assert.Equal(limit, issue.Limit, 6);
+    }
+
+    [SkippableFact]
+    public void Grip_scale_within_15_percent_is_silent()
+    {
+        Skip.If(ModelTestUtil.TryLoadFixtureCar("abarth500") is null, ModelTestUtil.FixtureSkipReason);
+        var result = TunePipeline.Apply(Plan() with { GripScale = 1.10 }, LoadModels("abarth500"));
+        Assert.Empty(result.Issues);
+    }
+
+    [SkippableTheory]
+    [InlineData(1.6, ValidationSeverity.Warning, 1.5)]
+    [InlineData(0.4, ValidationSeverity.Warning, 0.5)]
+    [InlineData(-0.5, ValidationSeverity.Failure, 0)]     // fail at ≤ 0
+    public void Brake_torque_scale_thresholds_fire(double factor, ValidationSeverity severity, double limit)
+    {
+        Skip.If(ModelTestUtil.TryLoadFixtureCar("abarth500") is null, ModelTestUtil.FixtureSkipReason);
+        var result = TunePipeline.Apply(Plan() with { BrakeTorqueScale = factor }, LoadModels("abarth500"));
+
+        var issue = Assert.Single(result.Issues, i => i.Rule == "brakes.torque");
+        Assert.Equal(severity, issue.Severity);
+        Assert.Equal(factor, issue.Value, 3);
+        Assert.Equal(limit, issue.Limit, 6);
+    }
+
+    [SkippableTheory]
+    [InlineData(1.2, null, "diff.power", 1.0)]
+    [InlineData(null, -0.1, "diff.coast", 0.0)]
+    public void Diff_lock_outside_unit_range_fails(double? power, double? coast, string rule, double limit)
+    {
+        Skip.If(ModelTestUtil.TryLoadFixtureCar("abarth500") is null, ModelTestUtil.FixtureSkipReason);
+        var result = TunePipeline.Apply(
+            Plan() with { DiffPower = power, DiffCoast = coast }, LoadModels("abarth500"));
+
+        var issue = Assert.Single(result.Failures);
+        Assert.Equal(rule, issue.Rule);
+        Assert.Equal(power ?? coast!.Value, issue.Value, 6);
+        Assert.Equal(limit, issue.Limit);
+    }
+
+    [Fact]
+    public void Untouched_out_of_range_stock_diff_values_do_not_fail_noop_tunes()
+    {
+        // The tool judges tunes, not car authors: a mod shipping POWER=1.5 stock
+        // still builds a no-op tune; only values the tune CHANGED are range-checked.
+        var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["car.ini"] = Encoding.Latin1.GetBytes("[BASIC]\nTOTALMASS=1000\n"),
+            ["engine.ini"] = Encoding.Latin1.GetBytes(
+                "[HEADER]\nPOWER_CURVE=power.lut\n[ENGINE_DATA]\nLIMITER=7000\nMINIMUM=900\nINERTIA=0.1\n"),
+            ["drivetrain.ini"] = Encoding.Latin1.GetBytes(
+                "[GEARS]\nCOUNT=2\nGEAR_1=3.0\nGEAR_2=2.0\nFINAL=4.0\n[DIFFERENTIAL]\nPOWER=1.5\nCOAST=-0.2\n"),
+            ["power.lut"] = Encoding.Latin1.GetBytes("0|10\n1000|20\n2000|30\n"),
+        };
+        var models = CarModelSet.FromFiles(files);
+
+        var result = TuneValidator.Validate(models, SourceSnapshot.Capture(models));
+
+        Assert.Empty(result.Issues);
+    }
+
     // ---- warnings --------------------------------------------------------------
 
     [SkippableFact]

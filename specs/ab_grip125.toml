@@ -1,0 +1,7 @@
+# A/B lever test: grip only, +25% (deliberately past the ±15% warning line).
+[meta]
+source_car = "abarth500"
+tune_name  = "ab_grip125"
+
+[tyres]
+grip_scale = 1.25

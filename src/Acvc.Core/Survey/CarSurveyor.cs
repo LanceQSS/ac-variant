@@ -131,7 +131,7 @@ public static partial class CarSurveyor
         {
             classification = "loose-data";
             files = Directory.GetFiles(dataDir)
-                .ToDictionary(Path.GetFileName!, File.ReadAllBytes, StringComparer.OrdinalIgnoreCase)!;
+                .ToDictionary(f => Path.GetFileName(f)!, File.ReadAllBytes, StringComparer.OrdinalIgnoreCase);
         }
 
         var entry = CheckBuildable(carFolder, car, classification, files!, coreBugs);

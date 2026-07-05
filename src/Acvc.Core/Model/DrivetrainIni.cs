@@ -33,6 +33,23 @@ public sealed class DrivetrainIni
         Document.SetDouble("GEARS", $"GEAR_{gear}", ratio);
     }
 
+    /// <summary>Whether the car has a [DIFFERENTIAL] section at all.</summary>
+    public bool HasDifferential => Document.HasSection("DIFFERENTIAL");
+
+    /// <summary>[DIFFERENTIAL] POWER — lock fraction under power, 0..1.</summary>
+    public double DiffPower
+    {
+        get => Document.GetDouble("DIFFERENTIAL", "POWER");
+        set => Document.SetDouble("DIFFERENTIAL", "POWER", value);
+    }
+
+    /// <summary>[DIFFERENTIAL] COAST — lock fraction when coasting, 0..1.</summary>
+    public double DiffCoast
+    {
+        get => Document.GetDouble("DIFFERENTIAL", "COAST");
+        set => Document.SetDouble("DIFFERENTIAL", "COAST", value);
+    }
+
     private void ValidateGearNumber(int gear)
     {
         var count = GearCount;

@@ -1,0 +1,9 @@
+# A/B lever test: differential only — stock abarth500 is 0.04/0.04 (nearly open);
+# 0.90/0.60 is a very aggressive lock, unmistakable on corner exit and entry.
+[meta]
+source_car = "abarth500"
+tune_name  = "ab_diff_locked"
+
+[diff]
+power = 0.90
+coast = 0.60

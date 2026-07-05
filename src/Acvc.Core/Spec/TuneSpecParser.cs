@@ -12,7 +12,7 @@ namespace Acvc.Core.Spec;
 /// </summary>
 public static partial class TuneSpecParser
 {
-    private static readonly string[] KnownTables = { "meta", "power", "engine", "drivetrain", "mass" };
+    private static readonly string[] KnownTables = { "meta", "power", "engine", "drivetrain", "mass", "tyres", "brakes", "diff" };
 
     public static TunePlan Parse(string tomlText)
     {
@@ -79,6 +79,29 @@ public static partial class TuneSpecParser
             massTotal = OptionalDouble(mass, "mass", "total");
         }
 
+        double? gripScale = null;
+        if (GetTable(root, "tyres") is { } tyres)
+        {
+            CheckKeys(tyres, "[tyres]", "grip_scale");
+            gripScale = OptionalDouble(tyres, "tyres", "grip_scale");
+        }
+
+        double? brakeTorqueScale = null;
+        if (GetTable(root, "brakes") is { } brakes)
+        {
+            CheckKeys(brakes, "[brakes]", "torque_scale");
+            brakeTorqueScale = OptionalDouble(brakes, "brakes", "torque_scale");
+        }
+
+        double? diffPower = null;
+        double? diffCoast = null;
+        if (GetTable(root, "diff") is { } diff)
+        {
+            CheckKeys(diff, "[diff]", "power", "coast");
+            diffPower = OptionalDouble(diff, "diff", "power");
+            diffCoast = OptionalDouble(diff, "diff", "coast");
+        }
+
         return new TunePlan
         {
             SourceCar = sourceCar,
@@ -90,6 +113,10 @@ public static partial class TuneSpecParser
             FinalDrive = final,
             Gears = gears,
             MassTotal = massTotal,
+            GripScale = gripScale,
+            BrakeTorqueScale = brakeTorqueScale,
+            DiffPower = diffPower,
+            DiffCoast = diffCoast,
         };
     }
 

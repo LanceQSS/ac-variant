@@ -1,0 +1,7 @@
+# A/B lever test: brakes only, 60% of stock torque.
+[meta]
+source_car = "abarth500"
+tune_name  = "ab_brake060"
+
+[brakes]
+torque_scale = 0.6
