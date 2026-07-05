@@ -4,6 +4,7 @@ using Acvc.Core.Emit;
 using Acvc.Core.Model;
 using Acvc.Core.Spec;
 using Acvc.Core.Transforms;
+using Acvc.Core.UiMeta;
 
 namespace Acvc.Cli;
 
@@ -34,8 +35,8 @@ internal static class BuildCommand
         };
         var skinsOption = new Option<string>("--skins")
         {
-            Description = "Skin handling: 'copy' = first skin copied (default); 'junction' = NTFS junctions to all source skins (experimental).",
-            DefaultValueFactory = _ => "copy",
+            Description = "Skin handling: 'junction' = NTFS junctions to all source skins (default; CM and AC follow them); 'copy' = copy only the first skin.",
+            DefaultValueFactory = _ => "junction",
         };
         skinsOption.Validators.Add(result =>
         {
@@ -91,12 +92,14 @@ internal static class BuildCommand
             }
 
             var variantName = $"{plan.SourceCar}_{plan.TuneName}";
+            var uiPatch = UiCarPatcher.BuildPatch(models);
             var result = VariantEmitter.Emit(sourceFolder, variantName, models.MergedInto(files), new EmitOptions
             {
                 OutRoot = outOverride ?? carsRoot,
                 Force = force,
-                SkinsMode = skins == "junction" ? SkinsMode.Junction : SkinsMode.CopyFirst,
+                SkinsMode = skins == "copy" ? SkinsMode.CopyFirst : SkinsMode.Junction,
                 UiNameSuffix = $" — {plan.TuneName}",
+                UiPatch = uiPatch,
                 SpecText = specText,
                 SpecFileName = Path.GetFileName(specPath),
             });
@@ -107,6 +110,7 @@ internal static class BuildCommand
             Console.WriteLine($"  sfx: {result.AudioNote}" +
                               (result.RenamedBanks.Count > 0 ? $"; banks: {string.Join(", ", result.RenamedBanks)}" : ""));
             Console.WriteLine($"  skins: {result.SkinsNote}");
+            Console.WriteLine($"  ui specs: {uiPatch.Bhp}, {uiPatch.Torque}, {uiPatch.Weight}, {uiPatch.PwRatio} (LUT-derived)");
             return Program.ExitOk;
         }
         catch (TuneSpecException ex)
@@ -146,7 +150,7 @@ internal static class BuildCommand
     /// Source data files, in memory: from data.acd when packed, else from a loose
     /// data/ folder (common for mods). Neither path writes anything.
     /// </summary>
-    private static IReadOnlyDictionary<string, byte[]> LoadSourceData(string sourceFolder)
+    internal static IReadOnlyDictionary<string, byte[]> LoadSourceData(string sourceFolder)
     {
         if (File.Exists(Path.Combine(sourceFolder, "data.acd")))
             return AcdUnpacker.Load(sourceFolder).Files;

@@ -48,6 +48,7 @@ internal static class Program
         var root = new RootCommand("acvc — compiles tune specs into non-destructive Assetto Corsa car variants");
         root.Subcommands.Add(unpack);
         root.Subcommands.Add(BuildCommand.Create());
+        root.Subcommands.Add(DynoCommand.Create());
         return root.Parse(args).Invoke();
     }
 

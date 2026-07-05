@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Acvc.Core\Acvc.Core.csproj" />
+    <ProjectReference Include="..\..\src\Acvc.Cli\Acvc.Cli.csproj" />
   </ItemGroup>
 
 </Project>

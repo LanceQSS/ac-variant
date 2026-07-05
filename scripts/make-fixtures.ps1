@@ -30,6 +30,13 @@ foreach ($car in $Cars) {
     New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
     Copy-Item $src (Join-Path $dstDir 'data.acd') -Force
     Write-Host "copied $car\data.acd -> tests\fixtures\$car\"
+
+    # ui_car.json is needed by the M5 UI-regeneration tests (spec strings + curve shapes).
+    $ui = Join-Path $carsRoot "$car\ui\ui_car.json"
+    if (Test-Path $ui) {
+        Copy-Item $ui (Join-Path $dstDir 'ui_car.json') -Force
+        Write-Host "copied $car\ui\ui_car.json -> tests\fixtures\$car\"
+    }
 }
 
 Write-Host "Done. Fixtures are gitignored and stay local to this machine."

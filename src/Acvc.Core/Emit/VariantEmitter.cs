@@ -25,6 +25,11 @@ public sealed record EmitOptions
     public SkinsMode SkinsMode { get; init; } = SkinsMode.CopyFirst;
     /// <summary>Appended to ui_car.json's "name" value, e.g. " — street_600".</summary>
     public required string UiNameSuffix { get; init; }
+    /// <summary>
+    /// Regenerated specs/curves from the transformed data (M5). Null skips
+    /// regeneration and only the name is edited.
+    /// </summary>
+    public UiMeta.UiSpecsPatch? UiPatch { get; init; }
     /// <summary>Tune spec text, reproduced verbatim in the variant's readme.</summary>
     public required string SpecText { get; init; }
     public string? SpecFileName { get; init; }
@@ -140,11 +145,14 @@ public static class VariantEmitter
         // 5. Skins.
         var skinsNote = EmitSkins(temp, source, options.SkinsMode);
 
-        // 6. ui_car.json display name.
+        // 6. ui_car.json: display name, plus regenerated specs/curves when provided.
         var uiCarJson = Path.Combine(temp, "ui", "ui_car.json");
         if (!File.Exists(uiCarJson))
             throw new EmitException($"Source car has no ui/ui_car.json — it would be invisible in Content Manager.");
-        File.WriteAllBytes(uiCarJson, UiCarJson.AppendToName(File.ReadAllBytes(uiCarJson), options.UiNameSuffix));
+        var uiBytes = UiCarJson.AppendToName(File.ReadAllBytes(uiCarJson), options.UiNameSuffix);
+        if (options.UiPatch is { } patch)
+            uiBytes = UiMeta.UiCarPatcher.Apply(uiBytes, patch);
+        File.WriteAllBytes(uiCarJson, uiBytes);
 
         // 7. Readme.
         File.WriteAllText(Path.Combine(temp, "readme.txt"), BuildReadme(sourceName, variantName, skinsNote, options),

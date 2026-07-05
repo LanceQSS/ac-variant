@@ -80,6 +80,28 @@ public class TransformTests
             Assert.Equal(source[0].Value, models.PowerLut.GetRow(0).Value);
     }
 
+    [Fact]
+    public void PowerCurve_row_exactly_on_a_range_endpoint_gets_the_factor()
+    {
+        // Semantics (documented in CLAUDE.md): from/to are both inclusive.
+        var lut = PowerLut.Parse("1000|10\n2000|20\n3000|30\n");
+        PowerCurveTransform.Apply(lut, new[] { new PowerCurveRange(1000, 3000, 2.0) });
+        Assert.Equal(new[] { (1000.0, 20.0), (2000.0, 40.0), (3000.0, 60.0) }, lut.Rows);
+    }
+
+    [Fact]
+    public void PowerCurve_row_between_two_listed_ranges_is_untouched()
+    {
+        var lut = PowerLut.Parse("1000|10\n2000|20\n3000|30\n4000|40\n5000|50\n");
+        PowerCurveTransform.Apply(lut, new[]
+        {
+            new PowerCurveRange(1000, 2000, 2.0),
+            new PowerCurveRange(4000, 5000, 3.0),
+        });
+        // 3000 sits in the gap: factor 1.0, untouched.
+        Assert.Equal(new[] { (1000.0, 20.0), (2000.0, 40.0), (3000.0, 30.0), (4000.0, 120.0), (5000.0, 150.0) }, lut.Rows);
+    }
+
     [Theory]
     [InlineData(3000, 5000, 1.1, 5000, 6000, 1.2)]  // shared boundary = overlap
     [InlineData(1000, 4000, 1.1, 2000, 3000, 1.2)]  // nested

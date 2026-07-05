@@ -59,6 +59,13 @@ After transforms, regenerate in the variant's `ui/ui_car.json`:
 
 **Before trusting any curve-format assumption, read a stock Kunos car's `ui_car.json` and match its exact array shape.** This is the most likely place for silent format drift — validate by loading the variant in CM and eyeballing the spec panel.
 
+Settled facts (M5, verified against stock abarth500 + bmw_m3_e30):
+- Kunos ui files are **not strict JSON** (raw control chars inside strings) — regeneration is done by byte-splicing values, never a parser round-trip.
+- Curves are arrays of `["rpm","value"]` **string pairs**, grid 0 → LIMITER in 500-rpm steps with the limiter as the final point and a forced `["0","0"]` origin.
+- Spec string formats: `"213bhp"`, `"305Nm"`, `"1345kg"`, `"6.31kg/hp"` (pwratio truncated, not rounded); ui `weight` = TOTALMASS − 75 kg (driver).
+- Effective torque = power.lut × (1 + Σ MAX_BOOST over `[TURBO_n]`); power[bhp] = T·rpm·2π/60 ÷ 745.7 (exact identity between stock torqueCurve/powerCurve arrays).
+- Stock Kunos specs can be marketing numbers: bmw_m3_e30 ships brochure curves ~12% above its LUT. acvc regenerates from the LUT — variants may honestly show lower figures than the stock car's panel.
+
 ## Tune spec (TOML)
 ```toml
 [meta]
@@ -80,15 +87,17 @@ total = 1420
 ```
 Every table optional except `[meta]`. Unknown keys = hard error (catch typos, no silent ignores).
 
-## Skins
-Do not copy all skin folders (ACCT duplicated gigabytes; its top complaint). v1: copy only the first/default skin so the car renders, and note the source car's skins path in the variant's readme. Symlink/junction support = open decision; resolve during Milestone 4 by testing whether AC/CM follows NTFS junctions in `skins/`.
+Additional keys: `power.curve = [ { from = 3000, to = 5000, factor = 1.1 }, ... ]` and `drivetrain.gears = [3.2, 2.1, 1.5, 1.1, 0.9]` (must match the car's gear COUNT). power.curve semantics (implemented, M3): `from`/`to` are both **inclusive**; rows outside every listed range — including gaps between ranges — are left untouched; overlapping ranges are a hard error, not a precedence rule.
 
-## Build order (each milestone ends with passing tests before the next starts)
-1. **Cipher + container:** key gen ported, `acvc unpack` extracts a stock Kunos car; test = all extracted files are parseable text.
-2. **Model layer:** lossless read→write round-trip of engine.ini / drivetrain.ini / car.ini / power.lut (output byte-matches input when no transform applied).
-3. **Transforms + validation:** pure functions, table-driven xUnit tests per transform.
-4. **Emit:** full variant folder generation; manual acceptance = variant appears and drives in AC via Content Manager.
-5. **UI metadata + dyno:** ui_car.json regen validated against a stock car's shape; `acvc dyno` renders power/torque curve (pick ASCII or PNG via ScottPlot — one, not both).
+## Skins
+Do not copy all skin folders (ACCT duplicated gigabytes; its top complaint). **Settled in M5 (manual verdict on the real install): AC and CM both follow NTFS junctions in `skins/` — all 10 abarth500 skins listed and rendered through junctions, in CM and in-game.** Default is therefore `--skins junction` (one junction per source skin, created via `mklink /J`; no elevation needed); `--skins copy` copies only the first (alphabetical) skin as the fallback. The variant readme names the skin mode and the source skins path.
+
+## Build order — **all five milestones DONE; v1.0 tagged**
+1. **Cipher + container** — DONE. Key gen ported from the .bms; `acvc unpack` verified against real Kunos cars.
+2. **Model layer** — DONE. Lossless round-trip proven byte-identical (SHA-256) for every .ini/.lut in both fixture archives.
+3. **Transforms + validation** — DONE. Note: the limiter rule compares against peak power within the SOURCE limiter's range (stock bmw_m3_e30 carries overrev LUT rows past its limiter; the naive global-peak rule fails factory data).
+4. **Emit** — DONE. Manual acceptance passed (variant lists, drives, has audio, shows skins in CM). Kunos cars keep their FMOD event map in the global `content/sfx/GUIDs.txt`, not per-car — the emitter generates the variant's per-car `sfx/GUIDs.txt` from the global file's exact-token entries.
+5. **UI metadata + dyno** — DONE. PNG via ScottPlot (settled; not ASCII).
 
 ## Environment
 - Windows 11, .NET 8 LTS, single-file publish (`dotnet publish -r win-x64 -p:PublishSingleFile=true`).
@@ -101,7 +110,9 @@ Do not copy all skin folders (ACCT duplicated gigabytes; its top complaint). v1:
 dotnet build
 dotnet test
 dotnet run --project src/Acvc.Cli -- build specs/street_600.toml
+dotnet run --project src/Acvc.Cli -- build specs/street_600.toml --force --skins copy
 dotnet run --project src/Acvc.Cli -- unpack ks_toyota_supra_mkiv
+dotnet run --project src/Acvc.Cli -- dyno specs/street_600.toml
 ```
 
 ## Out of scope (v1 — reject scope creep, cite this section)
