@@ -16,7 +16,7 @@ namespace Acvc.Gui;
 /// MainViewModel, which talks to Acvc.Core; this file renders results and opens
 /// dialogs, nothing else.
 /// </summary>
-public partial class MainWindow : Window
+public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 {
     private readonly MainViewModel _vm = new();
     private string? _lastVariantPath;
@@ -28,6 +28,8 @@ public partial class MainWindow : Window
         var version = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "?";
         Title = $"AC Variant {version}";
+        AppTitleBar.Title = Title;
+        StyleDynoPlotDark();
 
         _vm.PropertyChanged += OnVmPropertyChanged;
         _vm.PreviewUpdated += (_, _) => Dispatcher.Invoke(RenderPreview);
@@ -149,7 +151,24 @@ public partial class MainWindow : Window
             plot.XLabel("rpm");
             plot.YLabel("Nm / bhp");
             plot.ShowLegend(Alignment.UpperLeft);
+            // Clear() keeps the previous axis limits (initially ±10 on an empty
+            // plot); without an explicit autoscale the curves render squeezed
+            // into that stale viewport.
+            plot.Axes.AutoScale();
         }
+        DynoPlot.Refresh();
+    }
+
+    private void StyleDynoPlotDark()
+    {
+        var plot = DynoPlot.Plot;
+        plot.FigureBackground.Color = ScottPlot.Color.FromHex("#1c1c1c");
+        plot.DataBackground.Color = ScottPlot.Color.FromHex("#242424");
+        plot.Axes.Color(ScottPlot.Color.FromHex("#d7d7d7"));
+        plot.Grid.MajorLineColor = ScottPlot.Color.FromHex("#3a3a3a");
+        plot.Legend.BackgroundColor = ScottPlot.Color.FromHex("#2a2a2a");
+        plot.Legend.FontColor = ScottPlot.Color.FromHex("#d7d7d7");
+        plot.Legend.OutlineColor = ScottPlot.Color.FromHex("#555555");
         DynoPlot.Refresh();
     }
 

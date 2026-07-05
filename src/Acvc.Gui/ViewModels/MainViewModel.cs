@@ -296,7 +296,8 @@ public partial class MainViewModel : ObservableObject
         if (_files is null || _stock is null)
             return;
 
-        TuneNameError = TuneSpecParser.IsValidTuneName(TuneName)
+        // An empty name disables Build but doesn't shout — only actual bad input does.
+        TuneNameError = string.IsNullOrEmpty(TuneName) || TuneSpecParser.IsValidTuneName(TuneName)
             ? ""
             : "letters, digits, '_' or '-' only";
 
