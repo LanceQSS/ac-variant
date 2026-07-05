@@ -1,7 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- net8.0-windows so viewmodel tests can reference Acvc.Gui (Windows-only by decision). -->
+    <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -22,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Acvc.Core\Acvc.Core.csproj" />
     <ProjectReference Include="..\..\src\Acvc.Cli\Acvc.Cli.csproj" />
+    <ProjectReference Include="..\..\src\Acvc.Gui\Acvc.Gui.csproj" />
   </ItemGroup>
 
 </Project>

@@ -130,6 +130,8 @@ Do not copy all skin folders (ACCT duplicated gigabytes; its top complaint). **S
 - Error surfaces show Core's messages **verbatim** — Core already writes user-grade errors; the GUI must not paraphrase them.
 - Rolling log at %LOCALAPPDATA%\acvc\logs (spec + outcome per build). The bug-report affordance is a button that opens the log folder.
 - Skins: junction default (settled M4); automatic fallback to copy-first-skin when junction creation fails (permissions/non-NTFS), with a notice.
+- Save/Load spec (.toml) buttons. The spec is the shareable artifact — the Overtake sharing story is specs, never data — so the GUI must make the spec visible, exportable, and loadable.
+- Variant-of-variant ui names replace any existing " — <tune>" suffix instead of concatenating (M6 chained-suffix note).
 
 ## Release engineering
 - License: MIT. LICENSE at root. Public GitHub repo.

@@ -11,19 +11,54 @@ namespace Acvc.Core.Emit;
 /// </summary>
 public static class UiCarJson
 {
+    /// <summary>The " — " (em-dash) marker that introduces a tune suffix in a display name.</summary>
+    private static readonly byte[] SuffixMarker = Encoding.UTF8.GetBytes(" — ");
+
+    /// <summary>
+    /// Appends <paramref name="suffix"/> to the "name" value — but a variant built
+    /// FROM a variant must not stack suffixes ("… — mod — street"), so any existing
+    /// " — …" tail in the name is replaced instead of concatenated (M8 amendment;
+    /// M6's chained builds exposed the stacking).
+    /// </summary>
     public static byte[] AppendToName(byte[] json, string suffix)
     {
-        var insertAt = FindNameValueEnd(json)
+        var valueEnd = FindNameValueEnd(json)
             ?? throw new EmitException("ui_car.json has no \"name\" string property to rename.");
+        var valueStart = FindNameValueStart(json, valueEnd);
+
+        // Truncate at the first existing suffix marker inside the name value, if any.
+        var insertAt = valueEnd;
+        for (var i = valueStart; i <= valueEnd - SuffixMarker.Length; i++)
+        {
+            if (json.AsSpan(i, SuffixMarker.Length).SequenceEqual(SuffixMarker))
+            {
+                insertAt = i;
+                break;
+            }
+        }
 
         var escaped = suffix.Replace("\\", "\\\\").Replace("\"", "\\\"");
         var suffixBytes = Encoding.UTF8.GetBytes(escaped);
 
-        var result = new byte[json.Length + suffixBytes.Length];
+        var result = new byte[insertAt + suffixBytes.Length + (json.Length - valueEnd)];
         json.AsSpan(0, insertAt).CopyTo(result);
         suffixBytes.CopyTo(result, insertAt);
-        json.AsSpan(insertAt).CopyTo(result.AsSpan(insertAt + suffixBytes.Length));
+        json.AsSpan(valueEnd).CopyTo(result.AsSpan(insertAt + suffixBytes.Length));
         return result;
+    }
+
+    /// <summary>Byte offset just after the opening quote of the name value that closes at <paramref name="valueEnd"/>.</summary>
+    private static int FindNameValueStart(byte[] json, int valueEnd)
+    {
+        // Walk back to the opening quote; the value scanner guarantees one exists.
+        var i = valueEnd - 1;
+        while (i >= 0)
+        {
+            if (json[i] == (byte)'"' && (i == 0 || json[i - 1] != (byte)'\\'))
+                return i + 1;
+            i--;
+        }
+        return 0;
     }
 
     /// <summary>

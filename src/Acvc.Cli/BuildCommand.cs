@@ -77,33 +77,27 @@ internal static class BuildCommand
                 throw new InvalidOperationException(
                     $"Source car '{plan.SourceCar}' not found at {sourceFolder}.");
 
-            var files = LoadSourceData(sourceFolder);
-            var models = CarModelSet.FromFiles(files);
-            var validation = TunePipeline.Apply(plan, models);
+            var outcome = VariantBuilder.Build(
+                sourceFolder,
+                plan,
+                outOverride ?? carsRoot,
+                force,
+                skins == "copy" ? SkinsMode.CopyFirst : SkinsMode.Junction,
+                specText,
+                Path.GetFileName(specPath));
 
-            foreach (var warning in validation.Warnings)
+            foreach (var warning in outcome.Validation.Warnings)
                 Console.WriteLine($"warning [{warning.Rule}]: {warning.Message} (value {warning.Value}, limit {warning.Limit})");
-            if (validation.HasFailures)
+            if (outcome.Validation.HasFailures)
             {
-                foreach (var failure in validation.Failures)
+                foreach (var failure in outcome.Validation.Failures)
                     Console.Error.WriteLine($"FAIL [{failure.Rule}]: {failure.Message} (value {failure.Value}, limit {failure.Limit})");
                 Console.Error.WriteLine("Validation failed — nothing was written.");
                 return Program.ExitValidation;
             }
 
-            var variantName = $"{plan.SourceCar}_{plan.TuneName}";
-            var uiPatch = UiCarPatcher.BuildPatch(models);
-            var result = VariantEmitter.Emit(sourceFolder, variantName, models.MergedInto(files), new EmitOptions
-            {
-                OutRoot = outOverride ?? carsRoot,
-                Force = force,
-                SkinsMode = skins == "copy" ? SkinsMode.CopyFirst : SkinsMode.Junction,
-                UiNameSuffix = $" — {plan.TuneName}",
-                UiPatch = uiPatch,
-                SpecText = specText,
-                SpecFileName = Path.GetFileName(specPath),
-            });
-
+            var result = outcome.Emit!;
+            var uiPatch = outcome.UiPatch!;
             Console.WriteLine($"Built {result.VariantName}");
             Console.WriteLine($"  -> {result.VariantPath}");
             Console.WriteLine($"  data/: {result.DataFileCount} files (loose; no data.acd by design)");

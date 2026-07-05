@@ -41,7 +41,7 @@ public static partial class TuneSpecParser
         CheckKeys(meta, "[meta]", "source_car", "tune_name");
         var sourceCar = RequireString(meta, "meta", "source_car");
         var tuneName = RequireString(meta, "meta", "tune_name");
-        if (!TuneNamePattern().IsMatch(tuneName))
+        if (!IsValidTuneName(tuneName))
             throw new TuneSpecException(
                 $"[meta] tune_name '{tuneName}' is invalid: use letters, digits, '_' or '-' only (it becomes part of the variant folder name).");
 
@@ -119,6 +119,10 @@ public static partial class TuneSpecParser
             DiffCoast = diffCoast,
         };
     }
+
+    /// <summary>The folder-safe tune-name rule; the GUI validates live against this.</summary>
+    public static bool IsValidTuneName(string tuneName)
+        => !string.IsNullOrEmpty(tuneName) && TuneNamePattern().IsMatch(tuneName);
 
     // ---- table plumbing -----------------------------------------------------
 

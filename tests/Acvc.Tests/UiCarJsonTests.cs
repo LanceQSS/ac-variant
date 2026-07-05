@@ -53,6 +53,23 @@ public class UiCarJsonTests
     }
 
     [Fact]
+    public void Existing_tune_suffix_is_replaced_not_stacked()
+    {
+        // M8 amendment: variant-of-variant names must not chain " — mod — street".
+        var input = Utf8("{\"name\": \"Fake Car — old_tune\", \"brand\": \"X\"}");
+        var output = UiCarJson.AppendToName(input, " — new_tune");
+        Assert.Equal(Utf8("{\"name\": \"Fake Car — new_tune\", \"brand\": \"X\"}"), output);
+    }
+
+    [Fact]
+    public void Appending_twice_yields_a_single_suffix()
+    {
+        var once = UiCarJson.AppendToName(Utf8("{\"name\": \"Car\"}"), " — a");
+        var twice = UiCarJson.AppendToName(once, " — b");
+        Assert.Equal(Utf8("{\"name\": \"Car — b\"}"), twice);
+    }
+
+    [Fact]
     public void Missing_name_fails_loudly()
     {
         var ex = Assert.Throws<EmitException>(

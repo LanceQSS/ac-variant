@@ -286,9 +286,29 @@ public static class VariantEmitter
             return $"copied first skin '{Path.GetFileName(first)}' (of {skinDirs.Length}); the rest remain in the source car";
         }
 
-        foreach (var skin in skinDirs)
-            CreateJunction(Path.Combine(targetSkins, Path.GetFileName(skin)), skin);
-        return $"{skinDirs.Length} NTFS junction(s) into the source car's skins folder (experimental)";
+        try
+        {
+            foreach (var skin in skinDirs)
+                CreateJunction(Path.Combine(targetSkins, Path.GetFileName(skin)), skin);
+            return $"{skinDirs.Length} NTFS junction(s) into the source car's skins folder";
+        }
+        catch (EmitException ex)
+        {
+            // Junctions can fail on non-NTFS volumes or exotic permissions; the car
+            // must still render, so fall back to copying the first skin — with a
+            // notice, never silently (GUI section, settled M8).
+            TryDeleteDirectory(targetSkins);
+            Directory.CreateDirectory(targetSkins);
+            var first = skinDirs[0];
+            CopyTree(first, Path.Combine(targetSkins, Path.GetFileName(first)));
+            return $"junction creation failed ({FirstLine(ex.Message)}) — fell back to copying first skin '{Path.GetFileName(first)}'";
+        }
+    }
+
+    private static string FirstLine(string text)
+    {
+        var line = text.ReplaceLineEndings(" ").Trim();
+        return line.Length > 100 ? line[..100] + "…" : line;
     }
 
     private static string BuildReadme(string sourceName, string variantName, string skinsNote, EmitOptions options)
